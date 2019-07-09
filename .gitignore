@@ -106,4 +106,4 @@ venv.bak/
 
 # others
 preprocessing_of_datasets/
-
+data/
