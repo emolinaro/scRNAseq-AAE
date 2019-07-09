@@ -1,0 +1,23 @@
+numpy
+pandas
+jupyter
+tensorflow
+tensorboard
+tensorflow-estimator
+tensorflow-probability
+tensorflow-datasets
+Keras
+Keras-Applications
+Keras-Preprocessing
+matplotlib
+seaborn
+tables
+bs4
+sklearn
+stemming
+scanpy
+scipy==1.2 # for scanpy
+python-igraph 
+louvain
+pydot
+

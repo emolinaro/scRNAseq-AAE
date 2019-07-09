@@ -1,4 +1,5 @@
 # Byte-compiled / optimized / DLL files
+cache/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -102,3 +103,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# others
+preprocessing_of_datasets/
+
