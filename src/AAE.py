@@ -5,7 +5,7 @@ from keras.optimizers import Adam, SGD, RMSprop
 from keras.initializers import RandomNormal
 from keras.utils import plot_model
 from keras import backend as K
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras import regularizers
 
 from IPython.display import clear_output
@@ -117,6 +117,8 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     
     
     # build discriminator model
+    
+    optimizer_dis = Adam(lr=0.0001)
 
     discr_input = Input(shape=(latent_dim,), name='Z')
     
@@ -157,12 +159,33 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     
     x = Dense(1, activation='sigmoid', name="Check")(x)
 
-    # instantiate decoder model
+    # instantiate and compile decoder model
     discriminator = Model(discr_input, x, name='discriminator')
+    discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
     
     return discriminator
 
+
+def build_generator(input_encoder, compression, discriminator):
+    
+    optimizer_gen = Adam(lr=0.0001)
+    
+    discriminator.trainable = False
+
+    generation = discriminator(compression)
+    
+    # instantiate and compile generator model
+    generator = Model(input_encoder, generation)
+    generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
+    
+    return generator
+
 def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
+    
+    # compile the models
+    optimizer_aae = Adam(lr=0.0002)
+    
+    #optimizer_aae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
     
     input_encoder = Input(shape=(original_dim, ), name='X')
     
@@ -172,21 +195,22 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     # build decoder
     decoder = build_decoder(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim)
     
-    # build discriminator
+    # build and compile discriminator
     discriminator = build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim)
-    
-    # instantiate AAE model
+
+    # ibuild and compile AAE model
     real_input = input_encoder
     compression = encoder(real_input)[2]
     reconstruction = decoder(compression)
-    generation = discriminator(compression)
  
     aae = Model(real_input, reconstruction, name='autoencoder')
+    aae.compile(optimizer=optimizer_aae, loss='mse')
     
-    # build generator
-    generator = Model(input_encoder, generation)
+    # build and compile generator model
+    generator = build_generator(real_input, compression, discriminator)
     
     return encoder, decoder, discriminator, generator, aae
+
 
 def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_size, latent_dim, epochs, gene, gene_names, graph=False, val_split=0.0):
     
@@ -194,60 +218,51 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
     gen_loss = []
     disc_loss = []
     
-    # compile the models
-    optimizer_aae = Adam(lr=0.0002)
-    #optimizer_aae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
-    optimizer_dis = Adam(lr=0.0001)
-    optimizer_gen = Adam(lr=0.0001)
-    
-    generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
-    
-    discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
-
-    aae.compile(optimizer=optimizer_aae, loss='mse')
-    
     for epoch in range(epochs):
         np.random.shuffle(x_train)
     
         for i in range(int(len(x_train) / batch_size)):
         
             batch = x_train[i*batch_size:i*batch_size+batch_size]
-        
+            
             # Reconstruction phase
             #aae.train_on_batch(batch, [batch,np.ones(batch_size,1)])
             aae_history = aae.fit(x=batch, 
                                   y=batch, 
                                   epochs=1, 
                                   batch_size=batch_size, 
-                                  validation_split=val_split, 
+                                  validation_split=val_split,
                                   verbose=0)
     
-           
             # Regularization phase
             fake_pred = encoder.predict(batch)[2]
             real_pred = np.random.normal(size=(batch_size,latent_dim)) # prior distribution
             discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-            discriminator_batch_y = np.concatenate([np.random.uniform(0.9,1.0,batch_size), np.random.uniform(0.0,0.1,batch_size)])
+            discriminator_batch_y = np.concatenate([np.random.uniform(0.9,1.0,batch_size),
+                                                    np.random.uniform(0.0,0.1,batch_size)])
         
-            #discriminator.trainable = True
-            #discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
             discriminator_history = discriminator.fit(x=discriminator_batch_x, 
                                                       y=discriminator_batch_y, 
                                                       epochs=1, 
                                                       batch_size=batch_size, 
-                                                      validation_split=val_split, 
+                                                      validation_split=val_split,
                                                       verbose=0)
             
             # Freeze the discriminator weights during training of generator
-            #generator.get_layer('discriminator').trainable = False 
-            #generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
             generator_history = generator.fit(x=batch, 
                                               y=np.zeros(batch_size), 
                                               epochs=1, 
                                               batch_size=batch_size, 
-                                              validation_split=val_split, 
+                                              validation_split=val_split,
                                               verbose=0)
         
+        
+            # check that the weights of disciminator and generator are the same and change at each batch
+            #print(discriminator.get_weights()[0][0])
+            #print("================================")
+            #print(generator.get_layer('discriminator').get_weights()[0][0])
+            #print("--------------------------------")
+            
         
         if graph:
             if ((epoch+1)%1 == 0):
