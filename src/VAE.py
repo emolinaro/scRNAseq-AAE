@@ -5,7 +5,7 @@ from keras.optimizers import Adam, SGD, RMSprop
 from keras.initializers import RandomNormal
 from keras.utils import plot_model
 from keras import backend as K
-from keras.callbacks import TensorBoard
+from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 from keras import regularizers
 
 import numpy as np
@@ -137,12 +137,25 @@ def build_VAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     
     return encoder, decoder, vae
 
+def checkpoint(file):
+    
+    checkpoint = ModelCheckpoint(file, monitor='accuracy', save_weights_only=True, verbose=0)
+    
+    return checkpoint
+
 def train_VAE(vae, x_train, batch_size, epochs, val_split=0.2):
     
     vae_history = vae.fit(x_train, 
                           epochs=epochs,
                           batch_size=batch_size,
                           validation_split=val_split,
+                          callbacks=[checkpoint('../models/vae_weights.hdf5'),
+                                     EarlyStopping(monitor='val_loss',
+                                                   patience=30, 
+                                                   verbose=0, 
+                                                   mode='min', 
+                                                   baseline=None, 
+                                                   restore_best_weights=False)],
                           verbose=1)
     
     return vae_history
