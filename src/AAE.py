@@ -118,7 +118,7 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     
     # build discriminator model
     
-    optimizer_dis = Adam(lr=0.0001)
+    optimizer_dis = Adam(lr=0.0001, decay=1e-6)
 
     discr_input = Input(shape=(latent_dim,), name='Z')
     
@@ -168,7 +168,7 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
 
 def build_generator(input_encoder, compression, discriminator):
     
-    optimizer_gen = Adam(lr=0.0001)
+    optimizer_gen = Adam(lr=0.0001, decay=1e-6)
     
     discriminator.trainable = False
 
@@ -183,7 +183,7 @@ def build_generator(input_encoder, compression, discriminator):
 def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     
     # compile the models
-    optimizer_aae = Adam(lr=0.0002)
+    optimizer_aae = Adam(lr=0.0002, decay=1e-6)
     
     #optimizer_aae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
     
@@ -227,6 +227,7 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
             
             # Reconstruction phase
             #aae.train_on_batch(batch, [batch,np.ones(batch_size,1)])
+            
             aae_history = aae.fit(x=batch, 
                                   y=batch, 
                                   epochs=1, 
