@@ -3,7 +3,7 @@ from keras.models import Model
 from keras.losses import mse, binary_crossentropy
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.initializers import RandomNormal
-from keras.utils import plot_model
+from keras.utils import plot_model, to_categorical
 from keras import backend as K
 from keras.callbacks import TensorBoard, ModelCheckpoint
 from keras import regularizers
@@ -13,7 +13,7 @@ from IPython.display import clear_output
 import numpy as np
 import os, sys
 
-from utils import sampling, plot_results_pca
+from utils import sampling, plot_results_pca, plot_results_umap
 
 
 #kernel_initializer =  RandomNormal(mean=0.0, stddev=0.01, seed=None)
@@ -248,7 +248,9 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, m
     return encoder, decoder, discriminator, generator, aae
 
 
-def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_size, latent_dim, epochs, gene, gene_names, graph=False, val_split=0.0):
+def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, 
+              batch_size, latent_dim, epochs, gene, gene_names, 
+              graph=False, val_split=0.0):
     
     rec_loss = []
     gen_loss = []
@@ -329,31 +331,36 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
     return rec_loss, gen_loss, disc_loss
 
 
-def train_SSAAE(aae, generator, discriminator, encoder, decoder, x_train, y_train, batch_size, latent_dim, epochs, gene, gene_names, graph=False, val_split=0.0):
+def train_SSAAE(aae, generator, discriminator, encoder, decoder, x_train, y_train, 
+                batch_size, latent_dim, epochs, gene, gene_names, 
+                graph=False, val_split=0.0):
     
     rec_loss = []
     gen_loss = []
     disc_loss = []
     
+    labels_code = to_categorical(y_train).astype(int)
+    labels_zeros = np.zeros((len(y_train), 1)) # extra label for training points with unknown classes
+    labels_code = np.append(labels_code, labels_zeros, axis=1)
+                            
+    data = np.concatenate([x_train, labels_code], axis=1)
+    
     for epoch in range(epochs):
-        np.random.shuffle(x_train)
+        np.random.shuffle(data)
     
         for i in range(int(len(x_train) / batch_size)):
         
-            batch = x_train[i*batch_size:i*batch_size+batch_size]
-            labels = y_train[i*batch_size:i*batch_size+batch_size]
+            batch = data[i*batch_size:i*batch_size+batch_size, :x_train.shape[1]]
+            labels = data[i*batch_size:i*batch_size+batch_size, x_train.shape[1]:]
             
-            labels_code = to_categorical(labels).astype(int)
-            labels_zeros = np.zeros((batch_size, 1)) # extra label for training points with unknown classes
-            labels_code = np.append(labels_code, labels_zeros, axis=1)
+            fake_pred = encoder.predict(batch)[2]
+            real_pred = np.random.normal(size=(batch_size, latent_dim))
             
-            # Regularization phase
-            fake_pred = [encoder.predict(batch)[2], labels_code]
-            real_pred = [np.random.normal(size=(batch_size, latent_dim)), labels_code]
-            discriminator_batch_x = np.concatenate([fake_pred, real_pred])
+            discriminator_batch_x = [np.concatenate([fake_pred, real_pred]), 
+                                     np.concatenate([labels, labels])]
             discriminator_batch_y = np.concatenate([np.random.uniform(0.9,1.0,batch_size),
                                                     np.random.uniform(0.0,0.1,batch_size)])
-        
+            
             discriminator_history = discriminator.fit(x=discriminator_batch_x, 
                                                       y=discriminator_batch_y, 
                                                       epochs=1, 
@@ -369,7 +376,7 @@ def train_SSAAE(aae, generator, discriminator, encoder, decoder, x_train, y_trai
                                   validation_split=val_split,
                                   verbose=0)
     
-            generator_history = generator.fit(x=[batch, labels_code], 
+            generator_history = generator.fit(x=[batch, labels], 
                                               y=np.zeros(batch_size), 
                                               epochs=1, 
                                               batch_size=batch_size, 
@@ -395,6 +402,7 @@ def train_SSAAE(aae, generator, discriminator, encoder, decoder, x_train, y_trai
                             discriminator_history.history["loss"][0]]))
                 
                 plot_results_pca((encoder, decoder), x_train, [gene], gene_names, latent_dim)
+                #plot_results_umap((encoder, decoder), x_train, [gene], gene_names, latent_dim)
                 
         else:
             if ((epoch+1)%10 == 0):
@@ -411,8 +419,3 @@ def train_SSAAE(aae, generator, discriminator, encoder, decoder, x_train, y_trai
         disc_loss.append(discriminator_history.history["loss"][0])
         
     return rec_loss, gen_loss, disc_loss
-
-    
-    
-    
-    
