@@ -1,4 +1,4 @@
-from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, Activation, LeakyReLU
+from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, Activation, LeakyReLU, concatenate
 from keras.models import Model
 from keras.losses import mse, binary_crossentropy
 from keras.optimizers import Adam, SGD, RMSprop
@@ -113,11 +113,10 @@ def build_decoder(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_di
     
     return decoder
 
-def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
-    
+def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, model_type='unsupervised', labels_dim=0):
     
     # build discriminator model
-    
+        
     optimizer_dis = Adam(lr=0.0001, decay=1e-6)
 
     discr_input = Input(shape=(latent_dim,), name='Z')
@@ -160,8 +159,20 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     x = Dense(1, activation='sigmoid', name="Check")(x)
 
     # instantiate and compile decoder model
-    discriminator = Model(discr_input, x, name='discriminator')
-    discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
+    
+    if model_type.lower() == 'unsupervised':
+        
+        discriminator = Model(discr_input, x, name='discriminator')
+        discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
+    
+    elif (model_type.lower() == 'semisupervised') and (labels_dim != 0):
+        
+        labels_input = Input(shape=(labels_dim+1,), name='Categories')
+        joined_input = concatenate([discr_input, labels_input])
+        discriminator = Model(joined_input, x, name='discriminator')
+        discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
+    else:
+        pass
     
     return discriminator
 
@@ -180,7 +191,7 @@ def build_generator(input_encoder, compression, discriminator):
     
     return generator
 
-def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
+def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, model_type='unsupervised', labels_dim=0):
     
     # compile the models
     optimizer_aae = Adam(lr=0.0002, decay=1e-6)
@@ -196,9 +207,9 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     decoder = build_decoder(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim)
     
     # build and compile discriminator
-    discriminator = build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim)
+    discriminator = build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, model_type, labels_dim)
 
-    # ibuild and compile AAE model
+    # build and compile AAE model
     real_input = input_encoder
     compression = encoder(real_input)[2]
     reconstruction = decoder(compression)
@@ -207,7 +218,20 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim):
     aae.compile(optimizer=optimizer_aae, loss='mse')
     
     # build and compile generator model
-    generator = build_generator(real_input, compression, discriminator)
+    if model_type.lower() == 'unsupervised':
+        
+        generator = build_generator(real_input, compression, discriminator)
+    
+    elif (model_type.lower() == 'semisupervised') and (labels_dim != 0):
+        
+        labels_input = Input(shape=(labels_dim+1,), name='Categories')
+        joined_input = concatenate([real_input, labels_input])
+        compression = concatenate[encoder(real_input)[2], labels_input]
+        generator = build_generator(joined_input, compression, discriminator)
+    
+    else:
+        pass
+        
     
     return encoder, decoder, discriminator, generator, aae
 
@@ -225,16 +249,7 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
         
             batch = x_train[i*batch_size:i*batch_size+batch_size]
             
-            # Reconstruction phase
-            #aae.train_on_batch(batch, [batch,np.ones(batch_size,1)])
             
-            aae_history = aae.fit(x=batch, 
-                                  y=batch, 
-                                  epochs=1, 
-                                  batch_size=batch_size, 
-                                  validation_split=val_split,
-                                  verbose=0)
-    
             # Regularization phase
             fake_pred = encoder.predict(batch)[2]
             real_pred = np.random.normal(size=(batch_size,latent_dim)) # prior distribution
@@ -249,7 +264,15 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
                                                       validation_split=val_split,
                                                       verbose=0)
             
-            # Freeze the discriminator weights during training of generator
+            # Reconstruction phase
+            aae_history = aae.fit(x=batch, 
+                                  y=batch, 
+                                  epochs=1, 
+                                  batch_size=batch_size, 
+                                  validation_split=val_split,
+                                  verbose=0)
+    
+
             generator_history = generator.fit(x=batch, 
                                               y=np.zeros(batch_size), 
                                               epochs=1, 
@@ -293,5 +316,9 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
         
     return rec_loss, gen_loss, disc_loss
 
+
+
+    
+    
     
     
