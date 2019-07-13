@@ -52,6 +52,40 @@ def plot_results(models,
         plt.ylabel("z[1]")
         plt.show()
         
+        
+def plot_results_louvain(models,
+                         data,
+                         labels,
+                         batch_size=None,
+                         reducer='UMAP'):
+
+    encoder, decoder = models
+    
+    x_test = data
+    y_test = labels
+    
+    z_mean, _, _ = encoder.predict(x_test, batch_size=batch_size)
+    
+    if reducer.lower() == 'umap':
+        reducer = UMAP()
+        z_mean = reducer.fit_transform(z_mean)
+    
+    else:
+        n_pca = 10
+        pca = PCA(n_components=n_pca)
+        z_mean = pca.fit_transform(z_mean)
+        
+    
+    cmap = plt.get_cmap('viridis', np.max(y_test)-np.min(y_test)+1)
+    plt.figure(figsize=(8, 6))
+    plt.scatter(z_mean[:, 0], z_mean[:, 1], c=y_test, cmap=cmap, vmin = np.min(y_test)-.5, vmax = np.max(y_test)+.5, s=10)
+    plt.colorbar()
+    plt.title('Louvain')
+    plt.xlabel("z[0]")
+    plt.ylabel("z[1]")
+    plt.show()
+    
+        
 def plot_results_pca(models,
                      data,
                      gene_list,
@@ -64,8 +98,9 @@ def plot_results_pca(models,
     
     x_test = data
     z_mean, _, _ = encoder.predict(x_test, batch_size=batch_size)
-        
-    pca = PCA(n_components=latent_dim)
+    
+    n_pca = latent_dim
+    pca = PCA(n_components=n_pca)
     z_mean = pca.fit_transform(z_mean)
     
     for name in gene_list:

@@ -118,8 +118,21 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, model
     # build discriminator model
         
     optimizer_dis = Adam(lr=0.0001, decay=1e-6)
-
-    discr_input = Input(shape=(latent_dim,), name='Z')
+    
+    if model_type.lower() == 'unsupervised':
+        
+        latent_input = Input(shape=(latent_dim,), name='Z')
+        discr_input = latent_input
+    
+    elif (model_type.lower() == 'semisupervised') and (labels_dim != 0):
+        
+        latent_input = Input(shape=(latent_dim,), name='Z')
+        labels_input = Input(shape=(labels_dim+1,), name='Categories')
+        discr_input = concatenate([latent_input, labels_input])
+        
+    else:
+        
+        pass
     
     x = Dropout(rate=0.1, name='DO')(discr_input)
     
@@ -158,20 +171,20 @@ def build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, model
     
     x = Dense(1, activation='sigmoid', name="Check")(x)
 
-    # instantiate and compile decoder model
+    # instantiate and compile discriminator model
     
     if model_type.lower() == 'unsupervised':
         
-        discriminator = Model(discr_input, x, name='discriminator')
+        discriminator = Model(latent_input, x, name='discriminator')
         discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
     
     elif (model_type.lower() == 'semisupervised') and (labels_dim != 0):
         
-        labels_input = Input(shape=(labels_dim+1,), name='Categories')
-        joined_input = concatenate([discr_input, labels_input])
-        discriminator = Model(joined_input, x, name='discriminator')
+        discriminator = Model([latent_input, labels_input], x, name='discriminator')
         discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
+        
     else:
+        
         pass
     
     return discriminator
@@ -198,7 +211,8 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, m
     
     #optimizer_aae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
     
-    input_encoder = Input(shape=(original_dim, ), name='X')
+    encoder_input = Input(shape=(original_dim, ), name='X')
+    labels_input = Input(shape=(labels_dim+1,), name='Categories')
     
     # build encoder
     encoder = build_encoder(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim)
@@ -210,7 +224,7 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, m
     discriminator = build_discriminator(latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, model_type, labels_dim)
 
     # build and compile AAE model
-    real_input = input_encoder
+    real_input = encoder_input
     compression = encoder(real_input)[2]
     reconstruction = decoder(compression)
  
@@ -220,16 +234,14 @@ def build_AAE(original_dim, latent_dim, layer_1_dim, layer_2_dim, layer_3_dim, m
     # build and compile generator model
     if model_type.lower() == 'unsupervised':
         
-        generator = build_generator(real_input, compression, discriminator)
+        generator = build_generator(real_input, encoder(real_input)[2], discriminator)
     
     elif (model_type.lower() == 'semisupervised') and (labels_dim != 0):
         
-        labels_input = Input(shape=(labels_dim+1,), name='Categories')
-        joined_input = concatenate([real_input, labels_input])
-        compression = concatenate[encoder(real_input)[2], labels_input]
-        generator = build_generator(joined_input, compression, discriminator)
+        generator = build_generator([real_input, labels_input], [encoder(real_input)[2], labels_input], discriminator)
     
     else:
+        
         pass
         
     
@@ -317,6 +329,88 @@ def train_AAE(aae, generator, discriminator, encoder, decoder, x_train, batch_si
     return rec_loss, gen_loss, disc_loss
 
 
+def train_SSAAE(aae, generator, discriminator, encoder, decoder, x_train, y_train, batch_size, latent_dim, epochs, gene, gene_names, graph=False, val_split=0.0):
+    
+    rec_loss = []
+    gen_loss = []
+    disc_loss = []
+    
+    for epoch in range(epochs):
+        np.random.shuffle(x_train)
+    
+        for i in range(int(len(x_train) / batch_size)):
+        
+            batch = x_train[i*batch_size:i*batch_size+batch_size]
+            labels = y_train[i*batch_size:i*batch_size+batch_size]
+            
+            labels_code = to_categorical(labels).astype(int)
+            labels_zeros = np.zeros((batch_size, 1)) # extra label for training points with unknown classes
+            labels_code = np.append(labels_code, labels_zeros, axis=1)
+            
+            # Regularization phase
+            fake_pred = [encoder.predict(batch)[2], labels_code]
+            real_pred = [np.random.normal(size=(batch_size, latent_dim)), labels_code]
+            discriminator_batch_x = np.concatenate([fake_pred, real_pred])
+            discriminator_batch_y = np.concatenate([np.random.uniform(0.9,1.0,batch_size),
+                                                    np.random.uniform(0.0,0.1,batch_size)])
+        
+            discriminator_history = discriminator.fit(x=discriminator_batch_x, 
+                                                      y=discriminator_batch_y, 
+                                                      epochs=1, 
+                                                      batch_size=batch_size, 
+                                                      validation_split=val_split,
+                                                      verbose=0)
+            
+            # Reconstruction phase
+            aae_history = aae.fit(x=batch, 
+                                  y=batch, 
+                                  epochs=1, 
+                                  batch_size=batch_size, 
+                                  validation_split=val_split,
+                                  verbose=0)
+    
+            generator_history = generator.fit(x=[batch, labels_code], 
+                                              y=np.zeros(batch_size), 
+                                              epochs=1, 
+                                              batch_size=batch_size, 
+                                              validation_split=val_split,
+                                              verbose=0)
+        
+        
+            # check that the weights of disciminator and generator are the same and change at each batch
+            #print(discriminator.get_weights()[0][0])
+            #print("================================")
+            #print(generator.get_layer('discriminator').get_weights()[0][0])
+            #print("--------------------------------")
+            
+        
+        if graph:
+            if ((epoch+1)%1 == 0):
+
+                clear_output()
+                
+                print("Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}".format(
+                          *[epoch+1, epochs, aae_history.history["loss"][0], 
+                            generator_history.history["loss"][0], 
+                            discriminator_history.history["loss"][0]]))
+                
+                plot_results_pca((encoder, decoder), x_train, [gene], gene_names, latent_dim)
+                
+        else:
+            if ((epoch+1)%10 == 0):
+                
+                #clear_output()
+                
+                print("Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}".format(
+                          *[epoch+1, epochs, aae_history.history["loss"][0], 
+                            generator_history.history["loss"][0], 
+                            discriminator_history.history["loss"][0]]))
+                                 
+        rec_loss.append(aae_history.history["loss"][0])
+        gen_loss.append(generator_history.history["loss"][0])
+        disc_loss.append(discriminator_history.history["loss"][0])
+        
+    return rec_loss, gen_loss, disc_loss
 
     
     
