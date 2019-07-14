@@ -109,7 +109,7 @@ def plot_results_pca(models,
         y_test = x_test[:,idx_name]
         
     
-        cmap = plt.get_cmap('RdBu')
+        cmap = plt.get_cmap('viridis')
         plt.figure(figsize=(8, 6))
         plt.scatter(z_mean[:, 0], z_mean[:, 1], c=y_test, cmap=cmap, vmin = np.min(y_test), vmax = np.max(y_test), s=10)
         plt.colorbar()
@@ -121,11 +121,11 @@ def plot_results_pca(models,
         
 def plot_results_umap(models,
                       data,
+                      labels,
                       gene_list,
                       gene_names,
-                      latent_dim,
-                      batch_size=None,
-                      ):
+                      louvain=False,
+                      batch_size=None):
 
     encoder, decoder = models
     
@@ -140,12 +140,56 @@ def plot_results_umap(models,
         idx_name = np.where(gene_names == name)[0].tolist()[0]
         y_test = x_test[:,idx_name]
         
-    
-        cmap = plt.get_cmap('RdBu')
-        plt.figure(figsize=(8, 6))
-        plt.scatter(z_mean[:, 0], z_mean[:, 1], c=y_test, cmap=cmap, vmin = np.min(y_test), vmax = np.max(y_test), s=10)
-        plt.colorbar()
-        plt.title(name)
-        plt.xlabel("z[0]")
-        plt.ylabel("z[1]")
-        plt.show()
+        if louvain:
+            
+            plt.figure(figsize=(14, 5))
+            
+            plt.subplot(1,2,1)
+            cmap = plt.get_cmap('viridis') # RdBu 
+            plt.scatter(z_mean[:, 0], z_mean[:, 1], 
+                        c=y_test, 
+                        cmap=cmap, 
+                        vmin = np.min(y_test), 
+                        vmax = np.max(y_test), 
+                        s=10)
+            
+            plt.colorbar()
+            plt.title(name)
+            plt.xlabel("z[0]")
+            plt.ylabel("z[1]")
+            
+            plt.subplot(1,2,2)
+            
+            cmap2 = plt.get_cmap('tab20', np.max(labels)-np.min(labels)+1)
+            plt.scatter(z_mean[:, 0], z_mean[:, 1], 
+                        c=labels, 
+                        cmap=cmap2, 
+                        vmin = np.min(labels)-.5, 
+                        vmax = np.max(labels)+.5, 
+                        s=10)
+            
+            plt.colorbar()
+            plt.title('Louvain')
+            plt.xlabel("z[0]")
+            plt.ylabel("z[1]")
+            
+            plt.tight_layout()
+            plt.show()
+            
+        else: 
+        
+            cmap = plt.get_cmap('viridis') # RdBu
+            plt.figure(figsize=(7, 5))
+            plt.scatter(z_mean[:, 0], z_mean[:, 1], 
+                        c=y_test, cmap=cmap, 
+                        vmin = np.min(y_test), 
+                        vmax = np.max(y_test), 
+                        s=10)
+            
+            plt.colorbar()
+            plt.title(name)
+            plt.xlabel("z[0]")
+            plt.ylabel("z[1]")
+            
+            plt.show()
+            
