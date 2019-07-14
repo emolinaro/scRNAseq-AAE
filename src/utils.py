@@ -76,7 +76,7 @@ def plot_results_louvain(models,
         z_mean = pca.fit_transform(z_mean)
         
     
-    cmap = plt.get_cmap('viridis', np.max(y_test)-np.min(y_test)+1)
+    cmap = plt.get_cmap('tab20', np.max(y_test)-np.min(y_test)+1)
     plt.figure(figsize=(8, 6))
     plt.scatter(z_mean[:, 0], z_mean[:, 1], c=y_test, cmap=cmap, vmin = np.min(y_test)-.5, vmax = np.max(y_test)+.5, s=10)
     plt.colorbar()
