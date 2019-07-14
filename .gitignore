@@ -104,6 +104,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+# PyCharm
+.idea/
+
 # others
 preprocessing_of_datasets/
 data/
