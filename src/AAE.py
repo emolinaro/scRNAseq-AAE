@@ -1,17 +1,14 @@
-from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, Activation, LeakyReLU, concatenate
+from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, LeakyReLU, concatenate
 from keras.models import Model
-from keras.losses import mse, binary_crossentropy
-from keras.optimizers import Adam, SGD, RMSprop
-from keras.initializers import RandomNormal
-from keras.utils import plot_model, to_categorical
-from keras import backend as K
-from keras.callbacks import TensorBoard, ModelCheckpoint
+from keras.optimizers import Adam
+from keras.utils import plot_model
 from keras import regularizers
 
 from IPython.display import clear_output
+from keras.utils import to_categorical
 
 import numpy as np
-import os, sys
+import pandas as pd
 
 from utils import sampling, plot_results_pca, plot_results_umap
 
