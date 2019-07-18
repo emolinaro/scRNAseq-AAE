@@ -36,8 +36,8 @@ def sampling(args):
 	epsilon = K.random_normal(shape=(batch, dim))
 	return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
-def sampling_gumbel(logits_y, tau):
 
+def sampling_gumbel(logits_y, tau):
 	"""Gumbel trick to sample from a discrete distribution.
 
 	The original discrete distribution is replaced with a deterministic transformation of
@@ -55,17 +55,18 @@ def sampling_gumbel(logits_y, tau):
 		tensor object with one-hot encoding of the discrete variable
 	"""
 
-	G  = K.random_uniform(K.shape(logits_y), 0, 1)
+	G = K.random_uniform(K.shape(logits_y), 0, 1)
 
 	# logits of y + Gumbel noise
-	y = logits_y - K.log(-K.log(G + 1e-20) + 1e-20)
+	y = K.log(logits_y) - K.log(-K.log(G + 1e-20) + 1e-20)
 
 	# apply softmax to approximate the argmax function
 
 	tau_var = K.variable(tau, name="temperature")
-	y = softmax(y/tau_var)
+	y = softmax(y / tau_var)
 
 	return y
+
 
 def sampling_cat(batch, dim):
 	"""Draw samples from a multinomial distribution and return a one-hot encoded representation.
@@ -81,7 +82,7 @@ def sampling_cat(batch, dim):
 		matrix of one-hot encoded arrays (batch x dim)
 	"""
 
-	counts = np.random.multinomial(1000, [1. / dim] * dim, size=batch)
+	counts = np.random.multinomial(10000, [1. / dim] * dim, size=batch)
 	labels = np.argmax(counts, axis=-1)
 	labels_code = to_categorical(labels).astype(int)
 
@@ -93,6 +94,7 @@ def sampling_cat(batch, dim):
 		labels_code = to_categorical(labels).astype(int)
 
 	return labels_code
+
 
 def OneHot(num_classes=None, input_length=None, name='ohe_layer'):
 	"""Define Keras layer to implement one-hot encoding of the imput labels.
@@ -1499,6 +1501,8 @@ class AAE4(Base):
 		build encoder, decoder, discriminator, generator and autoencoder architectures
 	train(graph=False, gene=None)
 		train the Adversarial Autoencoder
+	plot_umap(gene_selected, louvain=False)
+		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
 
 	Raises
 	------
@@ -1528,7 +1532,6 @@ class AAE4(Base):
 				self.layers_dec_dim is None or \
 				self.layers_dis_dim is None or \
 				self.layers_dis_cat_dim is None:
-
 			raise TypeError(
 				"List of mandatory arguments: latent_dim, layers_enc_dim, layers_dec_dim, and layers_dis_dim.")
 
@@ -1539,6 +1542,83 @@ class AAE4(Base):
 
 		# update dictionary of internal parameters
 		self._update_dict()
+
+	def plot_umap(self, gene_selected, louvain=False):
+
+		"""Plot the gene expression of selected genes in a 2-D latent space using the UMAP clustering algorithm.
+
+		:param gene_selected:
+			list of genes
+		:type gene_selected: list
+		:param louvain:
+			if true, show label the 2-D latent space according Louvain clustering of cell data
+		:type louvain: bool
+		:return:
+		"""
+
+		z_mean, _, _, _ = self.encoder.predict(self.data, batch_size=self.batch_size)
+
+		reducer = UMAP()
+		z_mean = reducer.fit_transform(z_mean)
+
+		for name in gene_selected:
+
+			idx_name = np.where(self.gene_list == name)[0].tolist()[0]
+			subset = self.data[:, idx_name]
+
+			if louvain:
+
+				plt.figure(figsize=(14, 5))
+
+				plt.subplot(1, 2, 1)
+				cmap = plt.get_cmap('viridis')  # RdBu
+				plt.scatter(z_mean[:, 0], z_mean[:, 1],
+				            c=subset,
+				            cmap=cmap,
+				            vmin=np.min(subset),
+				            vmax=np.max(subset),
+				            s=5)
+
+				plt.colorbar()
+				plt.title(name)
+				plt.xlabel("z[0]")
+				plt.ylabel("z[1]")
+
+				plt.subplot(1, 2, 2)
+
+				cmap2 = plt.get_cmap('tab20', np.max(self.labels) - np.min(self.labels) + 1)
+				plt.scatter(z_mean[:, 0], z_mean[:, 1],
+				            c=self.labels,
+				            cmap=cmap2,
+				            vmin=np.min(self.labels) - .5,
+				            vmax=np.max(self.labels) + .5,
+				            s=5)
+
+				plt.colorbar()
+				plt.title('Louvain Clustering')
+				plt.xlabel("z[0]")
+				plt.ylabel("z[1]")
+
+				plt.tight_layout()
+				plt.show()
+
+			else:
+
+				cmap = plt.get_cmap('viridis')  # RdBu
+				plt.figure(figsize=(7, 5))
+				plt.scatter(z_mean[:, 0], z_mean[:, 1],
+				            c=subset,
+				            cmap=cmap,
+				            vmin=np.min(subset),
+				            vmax=np.max(subset),
+				            s=5)
+
+				plt.colorbar()
+				plt.title(name)
+				plt.xlabel("z[0]")
+				plt.ylabel("z[1]")
+
+				plt.show()
 
 	def _update_dict(self):
 		"""Update model dictionary of input parameters.
@@ -1624,7 +1704,9 @@ class AAE4(Base):
 		          kernel_initializer=self.kernel_initializer,
 		          bias_initializer=self.bias_initializer)(x)
 
-		y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(labels_dim,), name='y')(y)
+		y = Softmax(axis=-1, name='y')(y)
+
+		# y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(labels_dim,), name='y')(y)
 
 		# instantiate encoder model
 		encoder = Model(encoder_input, [z_mean, z_log_var, z, y], name='encoder')
@@ -1711,7 +1793,7 @@ class AAE4(Base):
 
 		return discriminator
 
-	def _build_generator(self, input_encoder, compression, discriminator):
+	def _build_generator(self, input_encoder, compression, compression_cat, discriminator, discriminator_cat):
 
 		"""Build generator neural network.
 
@@ -1729,12 +1811,16 @@ class AAE4(Base):
 
 		# keep discriminator weights frozen
 		discriminator.trainable = False
+		discriminator_cat.trainable = False
 
 		generation = discriminator(compression)
+		generation_cat = discriminator_cat(compression_cat)
 
 		# instantiate and compile generator model
-		generator = Model(input_encoder, generation)
-		generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
+		generator = Model(input_encoder, [generation, generation_cat])
+		generator.compile(optimizer=optimizer_gen,
+		                  loss=["binary_crossentropy", "binary_crossentropy"],
+		                  metrics=['accuracy', 'accuracy'])
 
 		return generator
 
@@ -1826,6 +1912,9 @@ class AAE4(Base):
 		# build and compile discriminator
 		self.discriminator = self._build_discriminator()
 
+		# build and compile categorical discriminator
+		self.discriminator_cat = self._build_discriminator_cat()
+
 		# build and compile autoencoder
 		real_input = encoder_input
 		compression = [self.encoder(real_input)[2], self.encoder(real_input)[3]]
@@ -1836,15 +1925,9 @@ class AAE4(Base):
 		# build and compile generator model
 		self.generator = self._build_generator(real_input,
 		                                       self.encoder(real_input)[2],
-		                                       self.discriminator)
-
-		# build and compile categorical discriminator
-		self.discriminator_cat = self._build_discriminator_cat()
-
-		# build and compile categorical generator model
-		self.generator_cat = self._build_generator_cat(real_input,
-		                                               self.encoder(real_input)[3],
-		                                               self.discriminator_cat)
+		                                       self.encoder(real_input)[3],
+		                                       self.discriminator,
+		                                       self.discriminator_cat)
 
 	def train(self, graph=False, gene=None):
 
@@ -1867,7 +1950,6 @@ class AAE4(Base):
 		rec_loss = []
 		gen_loss = []
 		dis_loss = []
-		gen_cat_loss = []
 		dis_cat_loss = []
 
 		val_split = 0.0
@@ -1897,7 +1979,10 @@ class AAE4(Base):
 				                                               verbose=0)
 
 				fake_pred_cat = self.encoder.predict(batch)[3]
-				real_pred_cat = sampling_cat(self.batch_size, labels_dim)
+				# real_pred_cat = sampling_cat(self.batch_size, labels_dim)
+				real_pred_cat = np.zeros((2, 2))
+				while real_pred_cat.shape[1] < labels_dim:
+					real_pred_cat = to_categorical(np.random.randint(0, labels_dim, (self.batch_size,)))
 				discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
 				discriminator_cat_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
 				                                            np.random.uniform(0.0, 0.1, self.batch_size)])
@@ -1918,24 +2003,16 @@ class AAE4(Base):
 				                                           verbose=0)
 
 				generator_history = self.generator.fit(x=batch,
-				                                       y=np.zeros(self.batch_size),
+				                                       y=[np.zeros(self.batch_size), np.zeros(self.batch_size)],
 				                                       epochs=1,
 				                                       batch_size=self.batch_size,
 				                                       validation_split=val_split,
 				                                       verbose=0)
 
-				generator_cat_history = self.generator_cat.fit(x=batch,
-				                                               y=np.zeros(self.batch_size),
-				                                               epochs=1,
-				                                               batch_size=self.batch_size,
-				                                               validation_split=val_split,
-				                                               verbose=0)
-
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
 			self.gen_loss = generator_history.history["loss"][0]
 			self.dis_loss = discriminator_history.history["loss"][0]
-			self.gen_cat_loss = generator_cat_history.history["loss"][0]
 			self.dis_cat_loss = discriminator_cat_history.history["loss"][0]
 
 			if ((epoch + 1) % 10 == 0):
@@ -1943,11 +2020,8 @@ class AAE4(Base):
 				clear_output()
 
 				print(
-					"""
-					Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}
-									   cat. generator loss: {5:.6f}, cat. discriminator loss: {6:.6f},
-					""".format(*[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss,
-					             self.gen_cat_loss, self.dis_cat_loss])
+					"Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}, cat. discriminator loss: {5:.6f}"
+						.format(*[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss, self.dis_cat_loss])
 				)
 
 				if graph and (gene is not None):
@@ -1956,9 +2030,8 @@ class AAE4(Base):
 			rec_loss.append(self.rec_loss)
 			gen_loss.append(self.gen_loss)
 			dis_loss.append(self.dis_loss)
-			gen_cat_loss.append(self.gen_cat_loss)
 			dis_cat_loss.append(self.dis_cat_loss)
 
 		print("Training completed.")
 
-		return rec_loss, gen_loss, dis_loss, gen_cat_loss, dis_cat_loss
+		return rec_loss, gen_loss, dis_loss, dis_cat_loss
