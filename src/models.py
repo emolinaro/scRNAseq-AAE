@@ -58,10 +58,9 @@ def sampling_gumbel(logits_y, tau):
 	G = K.random_uniform(K.shape(logits_y), 0, 1)
 
 	# logits of y + Gumbel noise
-	y = K.log(logits_y) - K.log(-K.log(G + 1e-20) + 1e-20)
+	y = logits_y - K.log(-K.log(G + 1e-20) + 1e-20)
 
 	# apply softmax to approximate the argmax function
-
 	tau_var = K.variable(tau, name="temperature")
 	y = softmax(y / tau_var)
 
@@ -455,9 +454,10 @@ class Base():
 			if true, show label the 2-D latent space according Louvain clustering of cell data
 		:type louvain: bool
 		:return:
+			figure
 		"""
 
-		z_mean, _, _ = self.encoder.predict(self.data, batch_size=self.batch_size)
+		z_mean = self.encoder.predict(self.data, batch_size=self.batch_size)[0]
 
 		reducer = UMAP()
 		z_mean = reducer.fit_transform(z_mean)
@@ -1490,8 +1490,6 @@ class AAE4(Base):
 		categorical discriminator deep neural network
 	generator_cat: keras.engine.training.Model
 		categorical generator deep neural network
-	gen_cat_loss: float
-		generator_cat loss
 	dis_cat_loss: float
 		discriminator_cat loss
 
@@ -1501,8 +1499,6 @@ class AAE4(Base):
 		build encoder, decoder, discriminator, generator and autoencoder architectures
 	train(graph=False, gene=None)
 		train the Adversarial Autoencoder
-	plot_umap(gene_selected, louvain=False)
-		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
 
 	Raises
 	------
@@ -1514,16 +1510,13 @@ class AAE4(Base):
 	             tau=0.5,
 	             layers_dis_cat_dim=None,
 	             lr_dis_cat=0.0001,
-	             lr_gen_cat=0.0001,
 	             dr_dis_cat=1e-6,
-	             dr_gen_cat=1e-6, **kwargs):
+	             **kwargs):
 
 		self.tau = tau
 		self.layers_dis_cat_dim = layers_dis_cat_dim
 		self.lr_dis_cat = lr_dis_cat
-		self.lr_gen_cat = lr_gen_cat
 		self.dr_dis_cat = dr_dis_cat
-		self.dr_gen_cat = dr_gen_cat
 
 		Base.__init__(self, **kwargs)
 
@@ -1537,88 +1530,10 @@ class AAE4(Base):
 
 		self.discriminator_cat = None
 		self.generator_cat = None
-		self.gen_cat_loss = None
 		self.dis_cat_loss = None
 
 		# update dictionary of internal parameters
 		self._update_dict()
-
-	def plot_umap(self, gene_selected, louvain=False):
-
-		"""Plot the gene expression of selected genes in a 2-D latent space using the UMAP clustering algorithm.
-
-		:param gene_selected:
-			list of genes
-		:type gene_selected: list
-		:param louvain:
-			if true, show label the 2-D latent space according Louvain clustering of cell data
-		:type louvain: bool
-		:return:
-		"""
-
-		z_mean, _, _, _ = self.encoder.predict(self.data, batch_size=self.batch_size)
-
-		reducer = UMAP()
-		z_mean = reducer.fit_transform(z_mean)
-
-		for name in gene_selected:
-
-			idx_name = np.where(self.gene_list == name)[0].tolist()[0]
-			subset = self.data[:, idx_name]
-
-			if louvain:
-
-				plt.figure(figsize=(14, 5))
-
-				plt.subplot(1, 2, 1)
-				cmap = plt.get_cmap('viridis')  # RdBu
-				plt.scatter(z_mean[:, 0], z_mean[:, 1],
-				            c=subset,
-				            cmap=cmap,
-				            vmin=np.min(subset),
-				            vmax=np.max(subset),
-				            s=5)
-
-				plt.colorbar()
-				plt.title(name)
-				plt.xlabel("z[0]")
-				plt.ylabel("z[1]")
-
-				plt.subplot(1, 2, 2)
-
-				cmap2 = plt.get_cmap('tab20', np.max(self.labels) - np.min(self.labels) + 1)
-				plt.scatter(z_mean[:, 0], z_mean[:, 1],
-				            c=self.labels,
-				            cmap=cmap2,
-				            vmin=np.min(self.labels) - .5,
-				            vmax=np.max(self.labels) + .5,
-				            s=5)
-
-				plt.colorbar()
-				plt.title('Louvain Clustering')
-				plt.xlabel("z[0]")
-				plt.ylabel("z[1]")
-
-				plt.tight_layout()
-				plt.show()
-
-			else:
-
-				cmap = plt.get_cmap('viridis')  # RdBu
-				plt.figure(figsize=(7, 5))
-				plt.scatter(z_mean[:, 0], z_mean[:, 1],
-				            c=subset,
-				            cmap=cmap,
-				            vmin=np.min(subset),
-				            vmax=np.max(subset),
-				            s=5)
-
-				plt.colorbar()
-				plt.title(name)
-				plt.xlabel("z[0]")
-				plt.ylabel("z[1]")
-
-				plt.show()
 
 	def _update_dict(self):
 		"""Update model dictionary of input parameters.
@@ -1631,16 +1546,12 @@ class AAE4(Base):
 			[['layer_' + str(k + 1) + '_dis_cat_dim' for k in range(len(self.layers_dis_cat_dim))],
 			 'lr_dis_cat',
 			 'dr_dis_cat',
-			 'lr_gen_cat',
-			 'dr_gen_cat',
 			 'tau'
 			 ])
 
 		dict2["Value"] = np.hstack([self.layers_dis_cat_dim,
 		                            self.lr_dis_cat,
 		                            self.dr_dis_cat,
-		                            self.lr_gen_cat,
-		                            self.dr_gen_cat,
 		                            self.tau
 		                            ])
 
@@ -1648,8 +1559,6 @@ class AAE4(Base):
 		                                   range(len(self.layers_dis_cat_dim))],
 		                                  "learning rate of cat. discriminator",
 		                                  "decay rate of cat. discriminator",
-		                                  "learning rate of cat. generator",
-		                                  "decay rate of cat. generator",
 		                                  "temperature parameter"
 		                                  ])
 
@@ -1704,9 +1613,9 @@ class AAE4(Base):
 		          kernel_initializer=self.kernel_initializer,
 		          bias_initializer=self.bias_initializer)(x)
 
-		y = Softmax(axis=-1, name='y')(y)
+		#y = Softmax(axis=-1, name='y')(y)
 
-		# y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(labels_dim,), name='y')(y)
+		y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(labels_dim,), name='y')(y)
 
 		# instantiate encoder model
 		encoder = Model(encoder_input, [z_mean, z_log_var, z, y], name='encoder')
@@ -1866,33 +1775,6 @@ class AAE4(Base):
 
 		return discriminator
 
-	def _build_generator_cat(self, input_encoder, compression, discriminator_cat):
-
-		"""Build categorical generator neural network.
-
-		:param input_encoder:
-			encoder input layer
-		:param compression:
-			encoder transformation
-		:param discriminator_cat:
-			initialized discriminator_cat model
-		:return:
-			generator_cat
-		"""
-
-		optimizer_gen = Adam(lr=self.lr_gen_cat, decay=self.dr_gen_cat)
-
-		# keep categorical discriminator weights frozen
-		discriminator_cat.trainable = False
-
-		generation = discriminator_cat(compression)
-
-		# instantiate and compile generator model
-		generator_cat = Model(input_encoder, generation)
-		generator_cat.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
-
-		return generator_cat
-
 	def build_model(self):
 
 		"""Build Adversarial Autoencoder model architecture.
@@ -1979,10 +1861,11 @@ class AAE4(Base):
 				                                               verbose=0)
 
 				fake_pred_cat = self.encoder.predict(batch)[3]
-				# real_pred_cat = sampling_cat(self.batch_size, labels_dim)
 				real_pred_cat = np.zeros((2, 2))
 				while real_pred_cat.shape[1] < labels_dim:
+					# real_pred_cat = sampling_cat(self.batch_size, labels_dim)
 					real_pred_cat = to_categorical(np.random.randint(0, labels_dim, (self.batch_size,)))
+
 				discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
 				discriminator_cat_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
 				                                            np.random.uniform(0.0, 0.1, self.batch_size)])
