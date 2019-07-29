@@ -1497,6 +1497,8 @@ class AAE4(Base):
 	-------
 	build_model()
 		build encoder, decoder, discriminator, generator and autoencoder architectures
+	get_summary(model)
+		print model summary
 	train(graph=False, gene=None)
 		train the Adversarial Autoencoder
 
@@ -1564,6 +1566,40 @@ class AAE4(Base):
 
 		for k in self.dict.keys():
 			self.dict[k] = np.append(self.dict[k], dict2[k])
+
+	def get_summary(self):
+
+		"""Print Adversarial Autoencoder model summary.
+
+		:return:
+		"""
+
+		print("\nEncoder Network")
+		print("===============")
+		self.encoder.summary()
+
+		print("\nDecoder Network")
+		print("===============")
+		self.decoder.summary()
+
+		print("\nAutoencoder Network")
+		print("===================")
+		self.autoencoder.summary()
+
+		print("\nGenerator Network")
+		print("=================")
+		# Freeze the discriminator weights during training of generator
+		self.generator.summary()
+
+		print("\nDiscriminator Network")
+		print("=====================")
+		self.discriminator.trainable = True  # note: model already compiled with trainable weights
+		self.discriminator.summary()
+
+		print("\nCategorical Discriminator Network")
+		print("=================================")
+		self.discriminator_cat.trainable = True  # note: model already compiled with trainable weights
+		self.discriminator_cat.summary()
 
 	def _build_encoder(self):
 
@@ -1838,13 +1874,18 @@ class AAE4(Base):
 
 		labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
 
+		labels_code = to_categorical(self.labels).astype(int)
+
+		data_ = np.concatenate([self.data, labels_code], axis=1)
+
 		print("Start model training...")
 
 		for epoch in range(self.epochs):
-			np.random.shuffle(self.data)
+			np.random.shuffle(data_)
 
 			for i in range(int(len(self.data) / self.batch_size)):
-				batch = self.data[i * self.batch_size:i * self.batch_size + self.batch_size]
+				batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
+				labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
 
 				# Regularization phase
 				fake_pred = self.encoder.predict(batch)[2]
@@ -1861,10 +1902,7 @@ class AAE4(Base):
 				                                               verbose=0)
 
 				fake_pred_cat = self.encoder.predict(batch)[3]
-				real_pred_cat = np.zeros((2, 2))
-				while real_pred_cat.shape[1] < labels_dim:
-					# real_pred_cat = sampling_cat(self.batch_size, labels_dim)
-					real_pred_cat = to_categorical(np.random.randint(0, labels_dim, (self.batch_size,)))
+				real_pred_cat = labels_
 
 				discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
 				discriminator_cat_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
