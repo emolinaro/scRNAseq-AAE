@@ -62,6 +62,8 @@ def sampling_gumbel(logits_y, tau):
 
 	# apply softmax to approximate the argmax function
 	tau_var = K.variable(tau, name="temperature")
+
+	# Gumbel-Softmax estimator
 	y = softmax(y / tau_var)
 
 	return y
