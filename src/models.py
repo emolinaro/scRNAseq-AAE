@@ -5,6 +5,8 @@ from keras.utils import to_categorical, plot_model
 from keras import regularizers
 from keras import backend as K
 from keras.activations import softmax
+from keras.losses import mse
+from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 
 from IPython.display import clear_output
 from sklearn.preprocessing import StandardScaler
@@ -15,7 +17,6 @@ from umap import UMAP
 
 from scanpy import read_h5ad
 import matplotlib.pyplot as plt
-
 
 def sampling(args):
 	"""Reparameterization trick by sampling from an isotropic unit Gaussian.
@@ -35,7 +36,6 @@ def sampling(args):
 	# by default, random_normal has mean = 0 and std = 1.0
 	epsilon = K.random_normal(shape=(batch, dim))
 	return z_mean + K.exp(0.5 * z_log_var) * epsilon
-
 
 def sampling_gumbel(logits_y, tau):
 	"""Gumbel trick to sample from a discrete distribution.
@@ -68,7 +68,6 @@ def sampling_gumbel(logits_y, tau):
 
 	return y
 
-
 def sampling_cat(batch, dim):
 	"""Draw samples from a multinomial distribution and return a one-hot encoded representation.
 
@@ -83,6 +82,8 @@ def sampling_cat(batch, dim):
 		matrix of one-hot encoded arrays (batch x dim)
 	"""
 
+	# TODO: function not used.
+
 	counts = np.random.multinomial(10000, [1. / dim] * dim, size=batch)
 	labels = np.argmax(counts, axis=-1)
 	labels_code = to_categorical(labels).astype(int)
@@ -95,7 +96,6 @@ def sampling_cat(batch, dim):
 		labels_code = to_categorical(labels).astype(int)
 
 	return labels_code
-
 
 def OneHot(num_classes=None, input_length=None, name='ohe_layer'):
 	"""Define Keras layer to implement one-hot encoding of the imput labels.
@@ -112,6 +112,7 @@ def OneHot(num_classes=None, input_length=None, name='ohe_layer'):
 	:return:
 		tensor
 	"""
+	# TODO: function not used.
 
 	# Check if inputs were supplied correctly
 	if num_classes is None or input_length is None:
@@ -129,7 +130,10 @@ def OneHot(num_classes=None, input_length=None, name='ohe_layer'):
 ############### BASE MODEL ###############
 ##########################################
 class Base():
-	"""Base Model Class
+	"""Base Model Class.
+
+		The class initialize parameters for the Adversarial and Variational Autoencoder Models.
+		Overriding implemented for some of the methods in the child classes.
 
 	Attributes
 	----------
@@ -546,6 +550,328 @@ class Base():
 
 
 ##########################################
+############### VAE MODEL ################
+##########################################
+class VAE(Base):
+	""" Unsupervised clustering with variational autoencoder model.
+
+	Methods
+	-------
+	get_parameters()
+		Print the list of network parameters
+	get_data(datapath)
+		Read data file and initialize cell gene counts, gene name list and cell subgroups
+	rescale_data()
+		Rescale gene expression data to zero mean and unit variance
+	get_summary(model)
+		print model summary
+	export_graph(model, filename)
+		save model graph to file
+	plot_umap(gene_selected, louvain=False)
+		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
+	export_model(filepath)
+		export the network models in h5 format
+
+	Raises
+	------
+	TypeError
+		If one of the following argument is null:  latent_dim, layers_enc_dim, layers_dec_dim.
+	"""
+
+	def __init__(self, **kwargs):
+		super(VAE, self).__init__(**kwargs)
+
+		if self.latent_dim is None or \
+				self.layers_enc_dim is None or \
+				self.layers_dec_dim is None:
+			raise TypeError(
+				"List of mandatory arguments: latent_dim, layers_enc_dim, layers_dec_dim, and layers_dis_dim.")
+
+		# create a dictionary with all networks' parameters
+		self._get_parameters()
+
+	def _get_parameters(self):
+		"""Create a dictionary with network parameter.
+
+		"""
+
+		# construct a dictionary with the list of network parameters
+
+		self.dict = {"Parameter": [], "Value": [], "Description": []}
+
+		self.dict["Parameter"] = np.hstack(['batch_size',
+		                                    'epochs',
+		                                    'alpha',
+		                                    'do_rate',
+		                                    'kernel_initializer',
+		                                    'bias_initializer',
+		                                    'l2_weight',
+		                                    'l1_weight',
+		                                    'latent_dim',
+		                                    ['layer_' + str(k + 1) + '_enc_dim' for k in
+		                                     range(len(self.layers_enc_dim))],
+		                                    ['layer_' + str(k + 1) + '_dec_dim' for k in
+		                                     range(len(self.layers_dec_dim))],
+		                                    'lr_ae',
+		                                    'dr_ae'
+		                                    ])
+
+		self.dict["Value"] = np.hstack([self.batch_size,
+		                                self.epochs,
+		                                self.alpha,
+		                                self.do_rate,
+		                                self.kernel_initializer,
+		                                self.bias_initializer,
+		                                self.l2_weight,
+		                                self.l1_weight,
+		                                self.latent_dim,
+		                                self.layers_enc_dim,
+		                                self.layers_dec_dim,
+		                                self.lr_ae,
+		                                self.dr_ae
+		                                ])
+
+		self.dict["Description"] = np.hstack(["batch size",
+		                                      "number of epochs",
+		                                      "alpha coeff. in activation function",
+		                                      "dropout rate",
+		                                      "kernel initializer of all dense layers",
+		                                      "bias initializer of all dense layers",
+		                                      "weight of l2 kernel regularization",
+		                                      "weight of l1 activity regularization",
+		                                      "dimension of latent space Z",
+		                                      ["dimension of encoder dense layer " + str(k + 1) for k in
+		                                       range(len(self.layers_enc_dim))],
+		                                      ["dimension of decoder dense layer " + str(k + 1) for k in
+		                                       range(len(self.layers_dec_dim))],
+		                                      "learning rate of autoencoder",
+		                                      "decay rate of autoencoder"
+		                                      ])
+
+	def get_summary(self):
+
+		"""Print Variational Autoencoder model summary.
+
+		:return:
+		"""
+
+		print("\nEncoder Network")
+		print("===============")
+		self.encoder.summary()
+
+		print("\nDecoder Network")
+		print("===============")
+		self.decoder.summary()
+
+		print("\nAutoencoder Network")
+		print("===================")
+		self.autoencoder.summary()
+
+	def export_graph(self, filepath):
+
+		"""Save model graphs to PNG images.
+
+		:param filepath:
+			 path of output image files
+		:type filepath: str
+		:return:
+		"""
+
+		if filepath[-1] != "/":
+			filepath = filepath + "/"
+
+		plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
+		plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
+		plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
+
+		print("Model graphs saved.\n")
+
+	def export_model(self, filepath):
+
+		"""Export the network models in h5 format.
+
+		:param filepath:
+			path of model files
+		:type filepath: str
+		:return:
+		"""
+
+		if filepath[-1] != "/":
+			filepath = filepath + "/"
+
+		self.autoencoder.save(filepath + 'autoencoder.h5')
+		self.encoder.save(filepath + 'encoder.h5')
+		self.decoder.save(filepath + 'decoder.h5')
+
+		print("All networks exported in h5 format.")
+
+	def _build_encoder(self):
+
+		"""Build encoder neural network.
+
+		:return:
+			encoder
+		"""
+		# NB: no kernel regularizer and activity regularizer
+		# TODO: implement: 1) DETERMINISTIC POSTERIOR Q(z|x); 2) UNIVERSAL APPROXIMATOR POSTERIOR
+
+		# GAUSSIAN POSTERIOR
+
+		encoder_input = Input(shape=(self.original_dim,), name="X")
+
+		x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+
+		# add dense layers
+		for i, nodes in enumerate(self.layers_enc_dim):
+			x = Dense(nodes,
+			          name="H_" + str(i + 1),
+			          use_bias=False,
+			          kernel_initializer=self.kernel_initializer
+			          )(x)
+
+			x = BatchNormalization(name='BN_' + str(i + 1))(x)
+
+			x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+
+			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+
+		z_mean = Dense(self.latent_dim,
+		               name='z_mean',
+		               kernel_initializer=self.kernel_initializer,
+		               bias_initializer=self.bias_initializer)(x)
+
+		z_log_var = Dense(self.latent_dim,
+		                  name='z_log_var',
+		                  kernel_initializer=self.kernel_initializer,
+		                  bias_initializer=self.bias_initializer)(x)
+
+		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
+
+		# instantiate encoder model
+		encoder = Model(encoder_input, [z_mean, z_log_var, z], name='encoder')
+
+		return encoder
+
+	def _build_decoder(self):
+
+		"""Build decoder neural network.
+
+		:return:
+			decoder
+		"""
+
+		# TODO: check impact of kernel and activity regularizer
+
+		decoder_input = Input(shape=(self.latent_dim,), name='Z')
+
+		x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+
+		# add dense layers
+		for i, nodes in enumerate(self.layers_dec_dim):
+			x = Dense(nodes,
+			          name="H_" + str(i + 1),
+			          use_bias=False,
+			          kernel_initializer=self.kernel_initializer,
+			          kernel_regularizer=regularizers.l2(self.l2_weight),
+			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+
+			x = BatchNormalization(name='BN_' + str(i + 1))(x)
+
+			x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+
+			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+
+		x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
+
+		# instantiate decoder model
+		decoder = Model(decoder_input, x, name='decoder')
+
+		return decoder
+
+	def build_model(self):
+
+		"""Build Variational Autoencoder model architecture.
+
+		"""
+
+		optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
+
+		# TODO: implement optimizer_ae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
+
+		encoder_input = Input(shape=(self.original_dim,), name='X')
+
+		# build encoder
+		self.encoder = self._build_encoder()
+
+		# build decoder
+		self.decoder = self._build_decoder()
+
+		# build and compile variational autoencoder
+		real_input = encoder_input
+		compression = self.encoder(real_input)[2]
+		reconstruction = self.decoder(compression)
+		self.autoencoder = Model(real_input, reconstruction, name='autoencoder')
+
+		# expected negative log-likelihood of the ii-th datapoint (reconstruction loss)
+		reconstruction_loss = mse(real_input, reconstruction)
+		reconstruction_loss *= self.original_dim
+
+		# add regularizer: Kullback-Leibler divergence between the encoder’s distribution Q(z|x) and p(z)
+		z_mean = self.encoder(real_input)[0]
+		z_log_var = self.encoder(real_input)[1]
+		kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)
+		kl_loss = K.sum(kl_loss, axis=-1)
+		kl_loss *= -0.5
+		ae_loss = K.mean(reconstruction_loss + kl_loss)
+
+		self.autoencoder.add_loss(ae_loss)
+		self.autoencoder.compile(optimizer=optimizer_ae, metrics=['accuracy'])
+
+	def train(self, val_split=0.2):
+
+		"""Training of the Variational Autoencoder.
+
+			The training will stop if there is no change in the validation loss after 30 epochs.
+
+		:param val_split:
+			fraction of data used for validation
+		:type val_split: float
+
+		:return:
+			lists containing training loss and validation loss
+		"""
+
+		print("Start model training...")
+
+		# def checkpoint(file):
+		#
+		# 	checkpoint = ModelCheckpoint(file, monitor='accuracy', save_weights_only=True, verbose=0)
+		#
+		# 	return checkpoint
+
+		vae_history = self.autoencoder.fit(self.data,
+		                                   epochs=self.epochs,
+		                                   batch_size=self.batch_size,
+		                                   validation_split=val_split,
+		                                   callbacks=[#checkpoint('../models/vae_weights.hdf5'),
+		                                              EarlyStopping(monitor='val_loss',
+		                                                            patience=30,
+		                                                            verbose=0,
+		                                                            mode='min',
+		                                                            baseline=None,
+		                                                            restore_best_weights=False)
+		                                              ],
+		                                   verbose=1)
+
+		print("Training completed.")
+
+		loss = vae_history.history["loss"]
+		val_loss = vae_history.history["val_loss"]
+
+		return loss, val_loss
+
+
+##########################################
 ############### MODEL n.1 ################
 ##########################################
 class AAE1(Base):
@@ -553,10 +879,20 @@ class AAE1(Base):
 
 	Methods
 	-------
-	build_model()
-		build encoder, decoder, discriminator, generator and autoencoder architectures
-	train(graph=False, gene=None)
-		train the Adversarial Autoencoder
+	get_parameters()
+		Print the list of network parameters
+	get_data(datapath)
+		Read data file and initialize cell gene counts, gene name list and cell subgroups
+	rescale_data()
+		Rescale gene expression data to zero mean and unit variance
+	get_summary(model)
+		print model summary
+	export_graph(model, filename)
+		save model graph to file
+	plot_umap(gene_selected, louvain=False)
+		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
+	export_model(filepath)
+		export the network models in h5 format
 
 	Raises
 	------
@@ -852,10 +1188,20 @@ class AAE2(Base):
 
 	Methods
 	-------
-	build_model()
-		build encoder, decoder, discriminator, generator and autoencoder architectures
-	train(graph=False, gene=None)
-		train the Adversarial Autoencoder
+	get_parameters()
+		Print the list of network parameters
+	get_data(datapath)
+		Read data file and initialize cell gene counts, gene name list and cell subgroups
+	rescale_data()
+		Rescale gene expression data to zero mean and unit variance
+	get_summary(model)
+		print model summary
+	export_graph(model, filename)
+		save model graph to file
+	plot_umap(gene_selected, louvain=False)
+		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
+	export_model(filepath)
+		export the network models in h5 format
 
 	Raises
 	------
@@ -1166,10 +1512,20 @@ class AAE3(Base):
 
 	Methods
 	-------
-	build_model()
-		build encoder, decoder, discriminator, generator and autoencoder architectures
-	train(graph=False, gene=None)
-		train the Adversarial Autoencoder
+	get_parameters()
+		Print the list of network parameters
+	get_data(datapath)
+		Read data file and initialize cell gene counts, gene name list and cell subgroups
+	rescale_data()
+		Rescale gene expression data to zero mean and unit variance
+	get_summary(model)
+		print model summary
+	export_graph(model, filename)
+		save model graph to file
+	plot_umap(gene_selected, louvain=False)
+		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
+	export_model(filepath)
+		export the network models in h5 format
 
 	Raises
 	------
@@ -1497,12 +1853,20 @@ class AAE4(Base):
 
 	Methods
 	-------
-	build_model()
-		build encoder, decoder, discriminator, generator and autoencoder architectures
+	get_parameters()
+		Print the list of network parameters
+	get_data(datapath)
+		Read data file and initialize cell gene counts, gene name list and cell subgroups
+	rescale_data()
+		Rescale gene expression data to zero mean and unit variance
 	get_summary(model)
 		print model summary
-	train(graph=False, gene=None)
-		train the Adversarial Autoencoder
+	export_graph(model, filename)
+		save model graph to file
+	plot_umap(gene_selected, louvain=False)
+		plot the gene expression in the 2-D latent space using UMAP clustering algorithm
+	export_model(filepath)
+		export the network models in h5 format
 
 	Raises
 	------
@@ -1602,6 +1966,50 @@ class AAE4(Base):
 		print("=================================")
 		self.discriminator_cat.trainable = True  # note: model already compiled with trainable weights
 		self.discriminator_cat.summary()
+
+	def export_graph(self, filepath):
+
+		"""Save model graphs to PNG images.
+
+		:param filepath:
+			 path of output image files
+		:type filepath: str
+		:return:
+		"""
+
+		if filepath[-1] != "/":
+			filepath = filepath + "/"
+
+		plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
+		plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
+		plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
+		plot_model(self.generator, to_file=filepath + "generator.png", show_shapes=True)
+		plot_model(self.discriminator, to_file=filepath + "discriminator.png", show_shapes=True)
+		plot_model(self.discriminator_cat, to_file=filepath + "discriminator_cat.png", show_shapes=True)
+
+		print("Model graphs saved.\n")
+
+	def export_model(self, filepath):
+
+		"""Export the network models in h5 format.
+
+		:param filepath:
+			path of model files
+		:type filepath: str
+		:return:
+		"""
+
+		if filepath[-1] != "/":
+			filepath = filepath + "/"
+
+		self.autoencoder.save(filepath + 'autoencoder.h5')
+		self.generator.save(filepath + 'generator.h5')
+		self.discriminator.save(filepath + 'discriminator.h5')
+		self.discriminator_cat.save(filepath + 'discriminator_cat.h5')
+		self.encoder.save(filepath + 'encoder.h5')
+		self.decoder.save(filepath + 'decoder.h5')
+
+		print("All networks exported in h5 format.")
 
 	def _build_encoder(self):
 
