@@ -2282,8 +2282,6 @@ class AAE4(Base):
 
 		val_split = 0.0
 
-		labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
 		labels_code = to_categorical(self.labels).astype(int)
 
 		data_ = np.concatenate([self.data, labels_code], axis=1)
