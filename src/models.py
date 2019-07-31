@@ -2338,8 +2338,6 @@ class AAE4(Base):
 				                                       validation_split=val_split,
 				                                       verbose=0)
 
-				# Semisupervised phase
-				# TODO: implement this step
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
