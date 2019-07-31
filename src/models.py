@@ -875,7 +875,7 @@ class VAE(Base):
 ############### MODEL n.1 ################
 ##########################################
 class AAE1(Base):
-	""" Unsupervised clustering with adversarial autoencoder model.
+	""" Unsupervised adversarial autoencoder model.
 
 	Methods
 	-------
@@ -1828,7 +1828,9 @@ class AAE3(Base):
 ############### MODEL n.4 ################
 ##########################################
 class AAE4(Base):
-	"""  Semi-supervised adversarial autoencoder model.
+	""" Semi-supervised adversarial autoencoder model with categorical distribution of classes labels.
+
+		The classes labels match the corresponsding data points.
 
 	Attributes
 	----------
@@ -2337,7 +2339,6 @@ class AAE4(Base):
 				                                       batch_size=self.batch_size,
 				                                       validation_split=val_split,
 				                                       verbose=0)
-
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
