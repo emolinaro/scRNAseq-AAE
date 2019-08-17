@@ -17,6 +17,7 @@ from umap import UMAP
 
 from scanpy import read_h5ad
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 def sampling(args):
@@ -222,24 +223,24 @@ class Base():
 	"""
 
 	def __init__(self,
-	             latent_dim=None,
-	             layers_enc_dim=None,
-	             layers_dec_dim=None,
-	             layers_dis_dim=None,
-	             alpha=0.1,
-	             do_rate=0.1,
-	             kernel_initializer='glorot_uniform',
-	             bias_initializer='zeros',
-	             l2_weight=0.01,
-	             l1_weight=0.01,
-	             batch_size=35,
-	             epochs=50,
-	             lr_dis=0.0001,
-	             lr_gen=0.0001,
-	             lr_ae=0.0002,
-	             dr_dis=1e-6,
-	             dr_gen=1e-6,
-	             dr_ae=1e-6):
+				 latent_dim=None,
+				 layers_enc_dim=None,
+				 layers_dec_dim=None,
+				 layers_dis_dim=None,
+				 alpha=0.1,
+				 do_rate=0.1,
+				 kernel_initializer='glorot_uniform',
+				 bias_initializer='zeros',
+				 l2_weight=0.01,
+				 l1_weight=0.01,
+				 batch_size=35,
+				 epochs=50,
+				 lr_dis=0.0001,
+				 lr_gen=0.0001,
+				 lr_ae=0.0002,
+				 dr_dis=1e-6,
+				 dr_gen=1e-6,
+				 dr_ae=1e-6):
 
 		self.latent_dim = latent_dim
 		self.layers_enc_dim = layers_enc_dim
@@ -284,70 +285,70 @@ class Base():
 		self.dict = {"Parameter": [], "Value": [], "Description": []}
 
 		self.dict["Parameter"] = np.hstack(['batch_size',
-		                                    'epochs',
-		                                    'alpha',
-		                                    'do_rate',
-		                                    'kernel_initializer',
-		                                    'bias_initializer',
-		                                    'l2_weight',
-		                                    'l1_weight',
-		                                    'latent_dim',
-		                                    ['layer_' + str(k + 1) + '_enc_dim' for k in
-		                                     range(len(self.layers_enc_dim))],
-		                                    ['layer_' + str(k + 1) + '_dec_dim' for k in
-		                                     range(len(self.layers_dec_dim))],
-		                                    'lr_ae',
-		                                    'dr_ae',
-		                                    ['layer_' + str(k + 1) + '_dis_dim' for k in
-		                                     range(len(self.layers_dis_dim))],
-		                                    'lr_dis',
-		                                    'dr_dis',
-		                                    'lr_gen',
-		                                    'dr_gen',
-		                                    ])
+											'epochs',
+											'alpha',
+											'do_rate',
+											'kernel_initializer',
+											'bias_initializer',
+											'l2_weight',
+											'l1_weight',
+											'latent_dim',
+											['layer_' + str(k + 1) + '_enc_dim' for k in
+											 range(len(self.layers_enc_dim))],
+											['layer_' + str(k + 1) + '_dec_dim' for k in
+											 range(len(self.layers_dec_dim))],
+											'lr_ae',
+											'dr_ae',
+											['layer_' + str(k + 1) + '_dis_dim' for k in
+											 range(len(self.layers_dis_dim))],
+											'lr_dis',
+											'dr_dis',
+											'lr_gen',
+											'dr_gen',
+											])
 
 		self.dict["Value"] = np.hstack([self.batch_size,
-		                                self.epochs,
-		                                self.alpha,
-		                                self.do_rate,
-		                                self.kernel_initializer,
-		                                self.bias_initializer,
-		                                self.l2_weight,
-		                                self.l1_weight,
-		                                self.latent_dim,
-		                                self.layers_enc_dim,
-		                                self.layers_dec_dim,
-		                                self.lr_ae,
-		                                self.dr_ae,
-		                                self.layers_dis_dim,
-		                                self.lr_dis,
-		                                self.dr_dis,
-		                                self.lr_gen,
-		                                self.dr_gen
-		                                ])
+										self.epochs,
+										self.alpha,
+										self.do_rate,
+										self.kernel_initializer,
+										self.bias_initializer,
+										self.l2_weight,
+										self.l1_weight,
+										self.latent_dim,
+										self.layers_enc_dim,
+										self.layers_dec_dim,
+										self.lr_ae,
+										self.dr_ae,
+										self.layers_dis_dim,
+										self.lr_dis,
+										self.dr_dis,
+										self.lr_gen,
+										self.dr_gen
+										])
 
 		self.dict["Description"] = np.hstack(["batch size",
-		                                      "number of epochs",
-		                                      "alpha coeff. in activation function",
-		                                      "dropout rate",
-		                                      "kernel initializer of all dense layers",
-		                                      "bias initializer of all dense layers",
-		                                      "weight of l2 kernel regularization",
-		                                      "weight of l1 activity regularization",
-		                                      "dimension of latent space Z",
-		                                      ["dimension of encoder dense layer " + str(k + 1) for k in
-		                                       range(len(self.layers_enc_dim))],
-		                                      ["dimension of decoder dense layer " + str(k + 1) for k in
-		                                       range(len(self.layers_dec_dim))],
-		                                      "learning rate of autoencoder",
-		                                      "decay rate of autoencoder",
-		                                      ["dimension of discriminator dense layer " + str(k + 1) for k in
-		                                       range(len(self.layers_dis_dim))],
-		                                      "learning rate of discriminator",
-		                                      "decay rate of discriminator",
-		                                      "learning rate of generator",
-		                                      "decay rate of generator"
-		                                      ])
+											  "number of epochs",
+											  "alpha coeff. in activation function",
+											  "dropout rate",
+											  "kernel initializer of all dense layers",
+											  "bias initializer of all dense layers",
+											  "weight of l2 kernel regularization",
+											  "weight of l1 activity regularization",
+											  "dimension of latent space Z",
+											  ["dimension of encoder dense layer " + str(k + 1) for k in
+											   range(len(self.layers_enc_dim))],
+											  ["dimension of decoder dense layer " + str(k + 1) for k in
+											   range(len(self.layers_dec_dim))],
+											  "learning rate of autoencoder",
+											  "decay rate of autoencoder",
+											  ["dimension of discriminator dense layer " + str(k + 1) for k in
+											   range(len(self.layers_dis_dim))],
+											  "learning rate of discriminator",
+											  "decay rate of discriminator",
+											  "learning rate of generator",
+											  "decay rate of generator"
+											  ])
 
 	def get_parameters(self):
 		"""Print the list of network parameter.
@@ -484,11 +485,11 @@ class Base():
 				plt.subplot(1, 2, 1)
 				cmap = plt.get_cmap('viridis')  # RdBu
 				plt.scatter(z_mean[:, 0], z_mean[:, 1],
-				            c=subset,
-				            cmap=cmap,
-				            vmin=np.min(subset),
-				            vmax=np.max(subset),
-				            s=5)
+							c=subset,
+							cmap=cmap,
+							vmin=np.min(subset),
+							vmax=np.max(subset),
+							s=5)
 
 				plt.colorbar()
 				plt.title(name)
@@ -499,11 +500,11 @@ class Base():
 
 				cmap2 = plt.get_cmap('tab20', np.max(self.labels) - np.min(self.labels) + 1)
 				plt.scatter(z_mean[:, 0], z_mean[:, 1],
-				            c=self.labels,
-				            cmap=cmap2,
-				            vmin=np.min(self.labels) - .5,
-				            vmax=np.max(self.labels) + .5,
-				            s=5)
+							c=self.labels,
+							cmap=cmap2,
+							vmin=np.min(self.labels) - .5,
+							vmax=np.max(self.labels) + .5,
+							s=5)
 
 				plt.colorbar()
 				plt.title('Louvain Clustering')
@@ -518,11 +519,11 @@ class Base():
 				cmap = plt.get_cmap('viridis')  # RdBu
 				plt.figure(figsize=(7, 5))
 				plt.scatter(z_mean[:, 0], z_mean[:, 1],
-				            c=subset,
-				            cmap=cmap,
-				            vmin=np.min(subset),
-				            vmax=np.max(subset),
-				            s=5)
+							c=subset,
+							cmap=cmap,
+							vmin=np.min(subset),
+							vmax=np.max(subset),
+							s=5)
 
 				plt.colorbar()
 				plt.title(name)
@@ -604,53 +605,53 @@ class VAE(Base):
 		self.dict = {"Parameter": [], "Value": [], "Description": []}
 
 		self.dict["Parameter"] = np.hstack(['batch_size',
-		                                    'epochs',
-		                                    'alpha',
-		                                    'do_rate',
-		                                    'kernel_initializer',
-		                                    'bias_initializer',
-		                                    'l2_weight',
-		                                    'l1_weight',
-		                                    'latent_dim',
-		                                    ['layer_' + str(k + 1) + '_enc_dim' for k in
-		                                     range(len(self.layers_enc_dim))],
-		                                    ['layer_' + str(k + 1) + '_dec_dim' for k in
-		                                     range(len(self.layers_dec_dim))],
-		                                    'lr_ae',
-		                                    'dr_ae'
-		                                    ])
+											'epochs',
+											'alpha',
+											'do_rate',
+											'kernel_initializer',
+											'bias_initializer',
+											'l2_weight',
+											'l1_weight',
+											'latent_dim',
+											['layer_' + str(k + 1) + '_enc_dim' for k in
+											 range(len(self.layers_enc_dim))],
+											['layer_' + str(k + 1) + '_dec_dim' for k in
+											 range(len(self.layers_dec_dim))],
+											'lr_ae',
+											'dr_ae'
+											])
 
 		self.dict["Value"] = np.hstack([self.batch_size,
-		                                self.epochs,
-		                                self.alpha,
-		                                self.do_rate,
-		                                self.kernel_initializer,
-		                                self.bias_initializer,
-		                                self.l2_weight,
-		                                self.l1_weight,
-		                                self.latent_dim,
-		                                self.layers_enc_dim,
-		                                self.layers_dec_dim,
-		                                self.lr_ae,
-		                                self.dr_ae
-		                                ])
+										self.epochs,
+										self.alpha,
+										self.do_rate,
+										self.kernel_initializer,
+										self.bias_initializer,
+										self.l2_weight,
+										self.l1_weight,
+										self.latent_dim,
+										self.layers_enc_dim,
+										self.layers_dec_dim,
+										self.lr_ae,
+										self.dr_ae
+										])
 
 		self.dict["Description"] = np.hstack(["batch size",
-		                                      "number of epochs",
-		                                      "alpha coeff. in activation function",
-		                                      "dropout rate",
-		                                      "kernel initializer of all dense layers",
-		                                      "bias initializer of all dense layers",
-		                                      "weight of l2 kernel regularization",
-		                                      "weight of l1 activity regularization",
-		                                      "dimension of latent space Z",
-		                                      ["dimension of encoder dense layer " + str(k + 1) for k in
-		                                       range(len(self.layers_enc_dim))],
-		                                      ["dimension of decoder dense layer " + str(k + 1) for k in
-		                                       range(len(self.layers_dec_dim))],
-		                                      "learning rate of autoencoder",
-		                                      "decay rate of autoencoder"
-		                                      ])
+											  "number of epochs",
+											  "alpha coeff. in activation function",
+											  "dropout rate",
+											  "kernel initializer of all dense layers",
+											  "bias initializer of all dense layers",
+											  "weight of l2 kernel regularization",
+											  "weight of l1 activity regularization",
+											  "dimension of latent space Z",
+											  ["dimension of encoder dense layer " + str(k + 1) for k in
+											   range(len(self.layers_enc_dim))],
+											  ["dimension of decoder dense layer " + str(k + 1) for k in
+											   range(len(self.layers_dec_dim))],
+											  "learning rate of autoencoder",
+											  "decay rate of autoencoder"
+											  ])
 
 	def get_summary(self):
 
@@ -728,10 +729,10 @@ class VAE(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_enc_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer
-			          )(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -740,14 +741,14 @@ class VAE(Base):
 			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
 		z_mean = Dense(self.latent_dim,
-		               name='z_mean',
-		               kernel_initializer=self.kernel_initializer,
-		               bias_initializer=self.bias_initializer)(x)
+					   name='z_mean',
+					   kernel_initializer=self.kernel_initializer,
+					   bias_initializer=self.bias_initializer)(x)
 
 		z_log_var = Dense(self.latent_dim,
-		                  name='z_log_var',
-		                  kernel_initializer=self.kernel_initializer,
-		                  bias_initializer=self.bias_initializer)(x)
+						  name='z_log_var',
+						  kernel_initializer=self.kernel_initializer,
+						  bias_initializer=self.bias_initializer)(x)
 
 		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
@@ -773,11 +774,11 @@ class VAE(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dec_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -854,18 +855,18 @@ class VAE(Base):
 		# 	return checkpoint
 
 		vae_history = self.autoencoder.fit(self.data,
-		                                   epochs=self.epochs,
-		                                   batch_size=self.batch_size,
-		                                   validation_split=val_split,
-		                                   callbacks=[  # checkpoint('../models/vae_weights.hdf5'),
-			                                   EarlyStopping(monitor='val_loss',
-			                                                 patience=30,
-			                                                 verbose=0,
-			                                                 mode='min',
-			                                                 baseline=None,
-			                                                 restore_best_weights=False)
-		                                   ],
-		                                   verbose=1)
+										   epochs=self.epochs,
+										   batch_size=self.batch_size,
+										   validation_split=val_split,
+										   callbacks=[  # checkpoint('../models/vae_weights.hdf5'),
+											   EarlyStopping(monitor='val_loss',
+															 patience=30,
+															 verbose=0,
+															 mode='min',
+															 baseline=None,
+															 restore_best_weights=False)
+										   ],
+										   verbose=1)
 
 		print("Training completed.")
 
@@ -933,12 +934,12 @@ class AAE1(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_enc_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          # kernel_regularizer=regularizers.l2(self.l2_weight),
-			          # activity_regularizer=regularizers.l1(self.l1_weight)
-			          )(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  # kernel_regularizer=regularizers.l2(self.l2_weight),
+					  # activity_regularizer=regularizers.l1(self.l1_weight)
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -947,14 +948,14 @@ class AAE1(Base):
 			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
 		z_mean = Dense(self.latent_dim,
-		               name='z_mean',
-		               kernel_initializer=self.kernel_initializer,
-		               bias_initializer=self.bias_initializer)(x)
+					   name='z_mean',
+					   kernel_initializer=self.kernel_initializer,
+					   bias_initializer=self.bias_initializer)(x)
 
 		z_log_var = Dense(self.latent_dim,
-		                  name='z_log_var',
-		                  kernel_initializer=self.kernel_initializer,
-		                  bias_initializer=self.bias_initializer)(x)
+						  name='z_log_var',
+						  kernel_initializer=self.kernel_initializer,
+						  bias_initializer=self.bias_initializer)(x)
 
 		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
@@ -980,11 +981,11 @@ class AAE1(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dec_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1018,11 +1019,11 @@ class AAE1(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1095,8 +1096,8 @@ class AAE1(Base):
 
 		# build and compile generator model
 		self.generator = self._build_generator(real_input,
-		                                       self.encoder(real_input)[2],
-		                                       self.discriminator)
+											   self.encoder(real_input)[2],
+											   self.discriminator)
 
 	def train(self, graph=False, gene=None):
 
@@ -1121,42 +1122,46 @@ class AAE1(Base):
 
 		val_split = 0.0
 
+		labels_code = to_categorical(self.labels).astype(int)
+
+		data_ = np.concatenate([self.data, labels_code], axis=1)
+
 		print("Start model training...")
 
 		for epoch in range(self.epochs):
-			np.random.shuffle(self.data)
+			np.random.shuffle(data_)
 
 			for i in range(int(len(self.data) / self.batch_size)):
-				batch = self.data[i * self.batch_size:i * self.batch_size + self.batch_size]
+				batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
 
 				# Reconstruction phase
 				autoencoder_history = self.autoencoder.fit(x=batch,
-				                                           y=batch,
-				                                           epochs=1,
-				                                           batch_size=self.batch_size,
-				                                           validation_split=val_split,
-				                                           verbose=0)
+														   y=batch,
+														   epochs=1,
+														   batch_size=self.batch_size,
+														   validation_split=val_split,
+														   verbose=0)
 
 				# Regularization phase
 				fake_pred = self.encoder.predict(batch)[2]
 				real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
 				discriminator_batch_x = np.concatenate([fake_pred, real_pred])
 				discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-				                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+														np.random.uniform(0.0, 0.1, self.batch_size)])
 
 				discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-				                                               y=discriminator_batch_y,
-				                                               epochs=1,
-				                                               batch_size=self.batch_size,
-				                                               validation_split=val_split,
-				                                               verbose=0)
+															   y=discriminator_batch_y,
+															   epochs=1,
+															   batch_size=self.batch_size,
+															   validation_split=val_split,
+															   verbose=0)
 
 				generator_history = self.generator.fit(x=batch,
-				                                       y=np.zeros(self.batch_size),
-				                                       epochs=1,
-				                                       batch_size=self.batch_size,
-				                                       validation_split=val_split,
-				                                       verbose=0)
+													   y=np.zeros(self.batch_size),
+													   epochs=1,
+													   batch_size=self.batch_size,
+													   validation_split=val_split,
+													   verbose=0)
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
@@ -1242,12 +1247,12 @@ class AAE2(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_enc_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          # kernel_regularizer=regularizers.l2(self.l2_weight),
-			          # activity_regularizer=regularizers.l1(self.l1_weight)
-			          )(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  # kernel_regularizer=regularizers.l2(self.l2_weight),
+					  # activity_regularizer=regularizers.l1(self.l1_weight)
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1256,14 +1261,14 @@ class AAE2(Base):
 			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
 		z_mean = Dense(self.latent_dim,
-		               name='z_mean',
-		               kernel_initializer=self.kernel_initializer,
-		               bias_initializer=self.bias_initializer)(x)
+					   name='z_mean',
+					   kernel_initializer=self.kernel_initializer,
+					   bias_initializer=self.bias_initializer)(x)
 
 		z_log_var = Dense(self.latent_dim,
-		                  name='z_log_var',
-		                  kernel_initializer=self.kernel_initializer,
-		                  bias_initializer=self.bias_initializer)(x)
+						  name='z_log_var',
+						  kernel_initializer=self.kernel_initializer,
+						  bias_initializer=self.bias_initializer)(x)
 
 		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
@@ -1289,11 +1294,11 @@ class AAE2(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dec_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1330,11 +1335,11 @@ class AAE2(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1408,8 +1413,8 @@ class AAE2(Base):
 
 		# build and compile generator model
 		self.generator = self._build_generator([real_input, labels_input],
-		                                       [self.encoder(real_input)[2], labels_input],
-		                                       self.discriminator)
+											   [self.encoder(real_input)[2], labels_input],
+											   self.discriminator)
 
 	def train(self, graph=False, gene=None):
 
@@ -1451,33 +1456,33 @@ class AAE2(Base):
 
 				# Reconstruction phase
 				autoencoder_history = self.autoencoder.fit(x=batch,
-				                                           y=batch,
-				                                           epochs=1,
-				                                           batch_size=self.batch_size,
-				                                           validation_split=val_split,
-				                                           verbose=0)
+														   y=batch,
+														   epochs=1,
+														   batch_size=self.batch_size,
+														   validation_split=val_split,
+														   verbose=0)
 
 				# Regularization phase
 				fake_pred = self.encoder.predict(batch)[2]
 				real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
 				discriminator_batch_x = [np.concatenate([fake_pred, real_pred]),
-				                         np.concatenate([labels_, labels_])]
+										 np.concatenate([labels_, labels_])]
 				discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-				                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+														np.random.uniform(0.0, 0.1, self.batch_size)])
 
 				discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-				                                               y=discriminator_batch_y,
-				                                               epochs=1,
-				                                               batch_size=self.batch_size,
-				                                               validation_split=val_split,
-				                                               verbose=0)
+															   y=discriminator_batch_y,
+															   epochs=1,
+															   batch_size=self.batch_size,
+															   validation_split=val_split,
+															   verbose=0)
 
 				generator_history = self.generator.fit(x=[batch, labels_],
-				                                       y=np.zeros(self.batch_size),
-				                                       epochs=1,
-				                                       batch_size=self.batch_size,
-				                                       validation_split=val_split,
-				                                       verbose=0)
+													   y=np.zeros(self.batch_size),
+													   epochs=1,
+													   batch_size=self.batch_size,
+													   validation_split=val_split,
+													   verbose=0)
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
@@ -1566,12 +1571,12 @@ class AAE3(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_enc_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          # kernel_regularizer=regularizers.l2(self.l2_weight),
-			          # activity_regularizer=regularizers.l1(self.l1_weight)
-			          )(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  # kernel_regularizer=regularizers.l2(self.l2_weight),
+					  # activity_regularizer=regularizers.l1(self.l1_weight)
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1580,14 +1585,14 @@ class AAE3(Base):
 			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
 		z_mean = Dense(self.latent_dim,
-		               name='z_mean',
-		               kernel_initializer=self.kernel_initializer,
-		               bias_initializer=self.bias_initializer)(x)
+					   name='z_mean',
+					   kernel_initializer=self.kernel_initializer,
+					   bias_initializer=self.bias_initializer)(x)
 
 		z_log_var = Dense(self.latent_dim,
-		                  name='z_log_var',
-		                  kernel_initializer=self.kernel_initializer,
-		                  bias_initializer=self.bias_initializer)(x)
+						  name='z_log_var',
+						  kernel_initializer=self.kernel_initializer,
+						  bias_initializer=self.bias_initializer)(x)
 
 		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
@@ -1618,11 +1623,11 @@ class AAE3(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dec_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1656,11 +1661,11 @@ class AAE3(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -1734,8 +1739,8 @@ class AAE3(Base):
 
 		# build and compile generator model
 		self.generator = self._build_generator(real_input,
-		                                       self.encoder(real_input)[2],
-		                                       self.discriminator)
+											   self.encoder(real_input)[2],
+											   self.discriminator)
 
 	def train(self, graph=False, gene=None):
 
@@ -1775,32 +1780,32 @@ class AAE3(Base):
 
 				# Reconstruction phase
 				autoencoder_history = self.autoencoder.fit(x=[batch, labels_],
-				                                           y=batch,
-				                                           epochs=1,
-				                                           batch_size=self.batch_size,
-				                                           validation_split=val_split,
-				                                           verbose=0)
+														   y=batch,
+														   epochs=1,
+														   batch_size=self.batch_size,
+														   validation_split=val_split,
+														   verbose=0)
 
 				# Regularization phase
 				fake_pred = self.encoder.predict(batch)[2]
 				real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
 				discriminator_batch_x = np.concatenate([fake_pred, real_pred])
 				discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-				                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+														np.random.uniform(0.0, 0.1, self.batch_size)])
 
 				discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-				                                               y=discriminator_batch_y,
-				                                               epochs=1,
-				                                               batch_size=self.batch_size,
-				                                               validation_split=val_split,
-				                                               verbose=0)
+															   y=discriminator_batch_y,
+															   epochs=1,
+															   batch_size=self.batch_size,
+															   validation_split=val_split,
+															   verbose=0)
 
 				generator_history = self.generator.fit(x=batch,
-				                                       y=np.zeros(self.batch_size),
-				                                       epochs=1,
-				                                       batch_size=self.batch_size,
-				                                       validation_split=val_split,
-				                                       verbose=0)
+													   y=np.zeros(self.batch_size),
+													   epochs=1,
+													   batch_size=self.batch_size,
+													   validation_split=val_split,
+													   verbose=0)
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
@@ -1881,11 +1886,11 @@ class AAE4(Base):
 	"""
 
 	def __init__(self,
-	             tau=0.5,
-	             layers_dis_cat_dim=None,
-	             lr_dis_cat=0.0001,
-	             dr_dis_cat=1e-6,
-	             **kwargs):
+				 tau=0.5,
+				 layers_dis_cat_dim=None,
+				 lr_dis_cat=0.0001,
+				 dr_dis_cat=1e-6,
+				 **kwargs):
 
 		self.tau = tau
 		self.layers_dis_cat_dim = layers_dis_cat_dim
@@ -1924,17 +1929,17 @@ class AAE4(Base):
 			 ])
 
 		dict2["Value"] = np.hstack([self.layers_dis_cat_dim,
-		                            self.lr_dis_cat,
-		                            self.dr_dis_cat,
-		                            self.tau
-		                            ])
+									self.lr_dis_cat,
+									self.dr_dis_cat,
+									self.tau
+									])
 
 		dict2["Description"] = np.hstack([["dimension of cat. discriminator dense layer " + str(k + 1) for k in
-		                                   range(len(self.layers_dis_cat_dim))],
-		                                  "learning rate of cat. discriminator",
-		                                  "decay rate of cat. discriminator",
-		                                  "temperature parameter"
-		                                  ])
+										   range(len(self.layers_dis_cat_dim))],
+										  "learning rate of cat. discriminator",
+										  "decay rate of cat. discriminator",
+										  "temperature parameter"
+										  ])
 
 		for k in self.dict.keys():
 			self.dict[k] = np.append(self.dict[k], dict2[k])
@@ -2035,9 +2040,9 @@ class AAE4(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_enc_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer)(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer)(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2046,23 +2051,23 @@ class AAE4(Base):
 			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
 		z_mean = Dense(self.latent_dim,
-		               name='z_mean',
-		               kernel_initializer=self.kernel_initializer,
-		               bias_initializer=self.bias_initializer)(x)
+					   name='z_mean',
+					   kernel_initializer=self.kernel_initializer,
+					   bias_initializer=self.bias_initializer)(x)
 
 		z_log_var = Dense(self.latent_dim,
-		                  name='z_log_var',
-		                  kernel_initializer=self.kernel_initializer,
-		                  bias_initializer=self.bias_initializer)(x)
+						  name='z_log_var',
+						  kernel_initializer=self.kernel_initializer,
+						  bias_initializer=self.bias_initializer)(x)
 
 		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
 		labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
 
 		y = Dense(labels_dim,
-		          name='logits',
-		          kernel_initializer=self.kernel_initializer,
-		          bias_initializer=self.bias_initializer)(x)
+				  name='logits',
+				  kernel_initializer=self.kernel_initializer,
+				  bias_initializer=self.bias_initializer)(x)
 
 		# y = Softmax(axis=-1, name='y')(y)
 
@@ -2095,11 +2100,11 @@ class AAE4(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dec_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2133,11 +2138,11 @@ class AAE4(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2179,8 +2184,8 @@ class AAE4(Base):
 		# instantiate and compile generator model
 		generator = Model(input_encoder, [generation, generation_cat])
 		generator.compile(optimizer=optimizer_gen,
-		                  loss=["binary_crossentropy", "binary_crossentropy"],
-		                  metrics=['accuracy', 'accuracy'])
+						  loss=["binary_crossentropy", "binary_crossentropy"],
+						  metrics=['accuracy', 'accuracy'])
 
 		return generator
 
@@ -2206,11 +2211,11 @@ class AAE4(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_cat_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          use_bias=False,
-			          kernel_initializer=self.kernel_initializer,
-			          kernel_regularizer=regularizers.l2(self.l2_weight),
-			          activity_regularizer=regularizers.l1(self.l1_weight))(x)
+					  name="H_" + str(i + 1),
+					  use_bias=False,
+					  kernel_initializer=self.kernel_initializer,
+					  kernel_regularizer=regularizers.l2(self.l2_weight),
+					  activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2257,10 +2262,10 @@ class AAE4(Base):
 
 		# build and compile generator model
 		self.generator = self._build_generator(real_input,
-		                                       self.encoder(real_input)[2],
-		                                       self.encoder(real_input)[3],
-		                                       self.discriminator,
-		                                       self.discriminator_cat)
+											   self.encoder(real_input)[2],
+											   self.encoder(real_input)[3],
+											   self.discriminator,
+											   self.discriminator_cat)
 
 	def train(self, graph=False, gene=None):
 
@@ -2302,46 +2307,46 @@ class AAE4(Base):
 
 				# Reconstruction phase
 				autoencoder_history = self.autoencoder.fit(x=batch,
-				                                           y=batch,
-				                                           epochs=1,
-				                                           batch_size=self.batch_size,
-				                                           validation_split=val_split,
-				                                           verbose=0)
+														   y=batch,
+														   epochs=1,
+														   batch_size=self.batch_size,
+														   validation_split=val_split,
+														   verbose=0)
 
 				# Regularization phase
 				fake_pred = self.encoder.predict(batch)[2]
 				real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
 				discriminator_batch_x = np.concatenate([fake_pred, real_pred])
 				discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-				                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+														np.random.uniform(0.0, 0.1, self.batch_size)])
 
 				discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-				                                               y=discriminator_batch_y,
-				                                               epochs=1,
-				                                               batch_size=self.batch_size,
-				                                               validation_split=val_split,
-				                                               verbose=0)
+															   y=discriminator_batch_y,
+															   epochs=1,
+															   batch_size=self.batch_size,
+															   validation_split=val_split,
+															   verbose=0)
 
 				fake_pred_cat = self.encoder.predict(batch)[3]
 				real_pred_cat = labels_
 
 				discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
 				discriminator_cat_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-				                                            np.random.uniform(0.0, 0.1, self.batch_size)])
+															np.random.uniform(0.0, 0.1, self.batch_size)])
 
 				discriminator_cat_history = self.discriminator_cat.fit(x=discriminator_cat_batch_x,
-				                                                       y=discriminator_cat_batch_y,
-				                                                       epochs=1,
-				                                                       batch_size=self.batch_size,
-				                                                       validation_split=val_split,
-				                                                       verbose=0)
+																	   y=discriminator_cat_batch_y,
+																	   epochs=1,
+																	   batch_size=self.batch_size,
+																	   validation_split=val_split,
+																	   verbose=0)
 
 				generator_history = self.generator.fit(x=batch,
-				                                       y=[np.zeros(self.batch_size), np.zeros(self.batch_size)],
-				                                       epochs=1,
-				                                       batch_size=self.batch_size,
-				                                       validation_split=val_split,
-				                                       verbose=0)
+													   y=[np.zeros(self.batch_size), np.zeros(self.batch_size)],
+													   epochs=1,
+													   batch_size=self.batch_size,
+													   validation_split=val_split,
+													   verbose=0)
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
@@ -2425,12 +2430,12 @@ class AAE5(Base):
 	"""
 
 	def __init__(self,
-	             num_clusters=None,
-	             tau=0.5,
-	             layers_dis_cat_dim=None,
-	             lr_dis_cat=0.0001,
-	             dr_dis_cat=1e-6,
-	             **kwargs):
+				 num_clusters=None,
+				 tau=0.5,
+				 layers_dis_cat_dim=None,
+				 lr_dis_cat=0.0001,
+				 dr_dis_cat=1e-6,
+				 **kwargs):
 
 		self.num_clusters = num_clusters
 		self.tau = tau
@@ -2472,19 +2477,19 @@ class AAE5(Base):
 			 ])
 
 		dict2["Value"] = np.hstack([self.layers_dis_cat_dim,
-		                            self.lr_dis_cat,
-		                            self.dr_dis_cat,
-		                            self.tau,
-		                            self.num_clusters
-		                            ])
+									self.lr_dis_cat,
+									self.dr_dis_cat,
+									self.tau,
+									self.num_clusters
+									])
 
 		dict2["Description"] = np.hstack([["dimension of cat. discriminator dense layer " + str(k + 1) for k in
-		                                   range(len(self.layers_dis_cat_dim))],
-		                                  "learning rate of cat. discriminator",
-		                                  "decay rate of cat. discriminator",
-		                                  "temperature parameter",
-		                                  "number of clusters in the dateset"
-		                                  ])
+										   range(len(self.layers_dis_cat_dim))],
+										  "learning rate of cat. discriminator",
+										  "decay rate of cat. discriminator",
+										  "temperature parameter",
+										  "number of clusters in the dateset"
+										  ])
 
 		for k in self.dict.keys():
 			self.dict[k] = np.append(self.dict[k], dict2[k])
@@ -2578,10 +2583,10 @@ class AAE5(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_enc_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          # use_bias=False,
-			          # kernel_initializer=self.kernel_initializer
-			          )(x)
+					  name="H_" + str(i + 1),
+					  # use_bias=False,
+					  # kernel_initializer=self.kernel_initializer
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2590,10 +2595,10 @@ class AAE5(Base):
 			x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
 		z0 = Dense(self.layers_enc_dim[-1],
-		           name="H_z",
-		           # use_bias=False,
-		           # kernel_initializer=self.kernel_initializer
-		           )(x)
+				   name="H_z",
+				   # use_bias=False,
+				   # kernel_initializer=self.kernel_initializer
+				   )(x)
 
 		z0 = BatchNormalization(name='BN_z')(z0)
 
@@ -2602,23 +2607,23 @@ class AAE5(Base):
 		z0 = Dropout(rate=self.do_rate, name='D_z')(z0)
 
 		z_mean = Dense(self.latent_dim,
-		               name='z_mean',
-		               # kernel_initializer=self.kernel_initializer,
-		               # bias_initializer=self.bias_initializer
-		               )(z0)
+					   name='z_mean',
+					   # kernel_initializer=self.kernel_initializer,
+					   # bias_initializer=self.bias_initializer
+					   )(z0)
 
 		z_log_var = Dense(self.latent_dim,
-		                  name='z_log_var',
-		                  # kernel_initializer=self.kernel_initializer,
-		                  # bias_initializer=self.bias_initializer
-		                  )(z0)
+						  name='z_log_var',
+						  # kernel_initializer=self.kernel_initializer,
+						  # bias_initializer=self.bias_initializer
+						  )(z0)
 
 		z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
 		y0 = Dense(self.layers_enc_dim[-1],
-		           name="H_y",
-		           use_bias=False,
-		           kernel_initializer=self.kernel_initializer)(x)
+				   name="H_y",
+				   use_bias=False,
+				   kernel_initializer=self.kernel_initializer)(x)
 
 		y0 = BatchNormalization(name='BN_y')(y0)
 
@@ -2627,10 +2632,10 @@ class AAE5(Base):
 		y0 = Dropout(rate=self.do_rate, name='D_y')(y0)
 
 		y = Dense(self.num_clusters,
-		          name='logits',
-		          # kernel_initializer=self.kernel_initializer,
-		          # bias_initializer=self.bias_initializer
-		          )(y0)
+				  name='logits',
+				  # kernel_initializer=self.kernel_initializer,
+				  # bias_initializer=self.bias_initializer
+				  )(y0)
 
 		y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(self.num_clusters,), name='y')(y)
 
@@ -2657,12 +2662,12 @@ class AAE5(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dec_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          # use_bias=False,
-			          # kernel_initializer=self.kernel_initializer,
-			          # kernel_regularizer=regularizers.l2(self.l2_weight),
-			          # activity_regularizer=regularizers.l1(self.l1_weight)
-			          )(x)
+					  name="H_" + str(i + 1),
+					  # use_bias=False,
+					  # kernel_initializer=self.kernel_initializer,
+					  # kernel_regularizer=regularizers.l2(self.l2_weight),
+					  # activity_regularizer=regularizers.l1(self.l1_weight)
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2694,12 +2699,12 @@ class AAE5(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          # use_bias=False,
-			          # kernel_initializer=self.kernel_initializer,
-			          # kernel_regularizer=regularizers.l2(self.l2_weight),
-			          # activity_regularizer=regularizers.l1(self.l1_weight)
-			          )(x)
+					  name="H_" + str(i + 1),
+					  # use_bias=False,
+					  # kernel_initializer=self.kernel_initializer,
+					  # kernel_regularizer=regularizers.l2(self.l2_weight),
+					  # activity_regularizer=regularizers.l1(self.l1_weight)
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2753,12 +2758,12 @@ class AAE5(Base):
 		# add dense layers
 		for i, nodes in enumerate(self.layers_dis_cat_dim):
 			x = Dense(nodes,
-			          name="H_" + str(i + 1),
-			          # use_bias=False,
-			          # kernel_initializer=self.kernel_initializer,
-			          # kernel_regularizer=regularizers.l2(self.l2_weight),
-			          # activity_regularizer=regularizers.l1(self.l1_weight)
-			          )(x)
+					  name="H_" + str(i + 1),
+					  # use_bias=False,
+					  # kernel_initializer=self.kernel_initializer,
+					  # kernel_regularizer=regularizers.l2(self.l2_weight),
+					  # activity_regularizer=regularizers.l1(self.l1_weight)
+					  )(x)
 
 			x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2799,18 +2804,22 @@ class AAE5(Base):
 		# build generators
 		compression = [self.encoder(encoder_input)[2], self.encoder(encoder_input)[3]]
 		generation, generation_cat = self._build_generator(compression[0],
-		                                                   compression[1],
-		                                                   self.discriminator,
-		                                                   self.discriminator_cat)
+														   compression[1],
+														   self.discriminator,
+														   self.discriminator_cat)
 
 		# build and compile autoencoder
 		reconstruction = self.decoder(compression)
 		self.autoencoder = Model(encoder_input,
-		                         [reconstruction, generation, generation_cat],
-		                         name='autoencoder')
+								 [reconstruction, generation, generation_cat],
+								 name='autoencoder')
 		self.autoencoder.compile(optimizer=optimizer_ae,
-		                         loss=['mse', 'binary_crossentropy', 'binary_crossentropy'],
-		                         loss_weights=[0.99, 0.005, 0.005], )
+								 loss=['mse', 'binary_crossentropy', 'binary_crossentropy'],
+								 loss_weights=[0.99, 0.005, 0.005], )
+
+
+
+
 
 	def train(self, graph=False, gene=None, val_split=0.2):
 
@@ -2838,179 +2847,98 @@ class AAE5(Base):
 		dis_loss = []
 		dis_cat_loss = []
 
-		labels_code = to_categorical(self.labels).astype(int)
-
-		data_ = np.concatenate([self.data, labels_code], axis=1)
-
 		print("Start model training...")
 
-		for epoch in range(self.epochs):
-			np.random.shuffle(data_)
+		steps = int(len(self.data) / self.batch_size)
+		batches = self.epochs * steps
 
-			for i in range(int(len(self.data) / self.batch_size)):
-				batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
+		# pbar = tqdm(range(batches))
 
-				# Regularization phase
-				real = np.random.uniform(0.0, 0.1, self.batch_size)
-				fake = np.random.uniform(0.9, 1.0, self.batch_size)
+		# clear_output()
 
-				fake_pred = self.encoder.predict(batch)[2]
-				real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-				discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-				discriminator_batch_y = np.concatenate([fake, real])
+		for step in range(batches):
 
-				self.discriminator.trainable = True
-				discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-				                                               y=discriminator_batch_y,
-				                                               epochs=1,
-				                                               batch_size=self.batch_size,
-				                                               validation_split=0.0,
-				                                               verbose=0)
-				self.discriminator.trainable = False
+			ids = np.random.randint(0, self.data.shape[0], self.batch_size)
+			batch = self.data[ids]
 
-				fake_pred_cat = self.encoder.predict(batch)[3]
-				class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
-				real_pred_cat = to_categorical(class_sample, num_classes=self.num_clusters).astype(int)
+			# Regularization phase
+			real = np.random.uniform(0.0, 0.1, self.batch_size)
+			fake = np.random.uniform(0.9, 1.0, self.batch_size)
 
-				discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
-				discriminator_cat_batch_y = np.concatenate([fake, real])
+			fake_pred = self.encoder.predict(batch)[2]
+			real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
+			discriminator_batch_x = np.concatenate([fake_pred, real_pred])
+			discriminator_batch_y = np.concatenate([fake, real])
 
-				discriminator_cat_history = self.discriminator_cat.fit(x=discriminator_cat_batch_x,
-				                                                       y=discriminator_cat_batch_y,
-				                                                       epochs=1,
-				                                                       batch_size=self.batch_size,
-				                                                       validation_split=0.0,
-				                                                       verbose=0)
 
-				# Reconstruction phase
-				real = np.zeros((self.batch_size,), dtype=int)
-				autoencoder_history = self.autoencoder.fit(x=batch,
-				                                           y=[batch, real, real],
-				                                           epochs=1,
-				                                           batch_size=self.batch_size,
-				                                           validation_split=val_split,
-				                                           verbose=0)
+			discriminator_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+																	  y=discriminator_batch_y)
+			dis_loss.append(discriminator_history[0])
+			# print(self.discriminator.get_weights()[0])
 
-			# Update loss functions at the end of each epoch
-			self.rec_loss = autoencoder_history.history["loss"][0]
-			self.gen_loss = autoencoder_history.history["val_loss"][0]
-			self.dis_loss = discriminator_history.history["loss"][0]
-			self.dis_cat_loss = discriminator_cat_history.history["loss"][0]
+			fake_pred_cat = self.encoder.predict(batch)[3]
+			class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
+			real_pred_cat = to_categorical(class_sample, num_classes=self.num_clusters).astype(int)
 
-			if ((epoch + 1) % 1 == 0):
+			discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
+			discriminator_cat_batch_y = np.concatenate([fake, real])
 
-				clear_output()
+			discriminator_cat_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
+																			  y=discriminator_cat_batch_y)
+			dis_cat_loss.append(discriminator_cat_history[0])
+
+			# Reconstruction phase
+			real = np.zeros((self.batch_size,), dtype=int)
+			autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
+																		y=[batch, real, real])
+			rec_loss.append(autoencoder_train_history[0])
+			# print(self.autoencoder.get_layer('discriminator').get_weights()[0])
+
+			autoencoder_test_history = self.autoencoder.test_on_batch(x=batch,
+																	  y=[batch, real, real])
+			val_loss.append(autoencoder_test_history[0])
+
+			# print("discriminator")
+			# print(dis_loss[0])
+			# print(self.discriminator.metrics_names)
+			# print("cat. discriminator")
+			# print(dis_cat_loss[0])
+			# print(self.discriminator_cat.metrics_names)
+			# print("rec. autoencoder")
+			# print(rec_loss[0])
+			# print(self.autoencoder.metrics_names)
+			# print("val. autoencoder")
+			# print(val_loss[0])
+
+
+			# if ((step+1) % steps == 0):
+			#
+			#     clear_output()
+			#
+			#     pbar.set_description("[loss Prior/Cat: %.3f / %.3f] [MSE train/val: %.3f / %.3f]"
+			#                          % (dis_loss[0], dis_cat_loss[0], rec_loss[0], val_loss[0]))
+			#
+			#     if graph and (gene is not None):
+			#         self.plot_umap(gene_selected=[gene], louvain=True)
+
+
+			if ((step+1) % steps == 0):
+
+				clear_output(wait=True)
 
 				print(
-					"Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, validation loss: {3:.6f}, discriminator loss: {4:.6f}, cat. discriminator loss: {5:.6f}"
-						.format(*[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss, self.dis_cat_loss])
+					"Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, val. loss: {3:.6f}, dis. loss: {4:.6f}, cat. dis. loss: {5:.6f}"
+						.format(
+						*[int((step + 1)/steps), self.epochs, rec_loss[0], val_loss[0], dis_loss[0], dis_cat_loss[0]])
 				)
 
 				if graph and (gene is not None):
 					self.plot_umap(gene_selected=[gene], louvain=True)
 
-			rec_loss.append(self.rec_loss)
-			val_loss.append(self.gen_loss)
-			dis_loss.append(self.dis_loss)
-			dis_cat_loss.append(self.dis_cat_loss)
+
 
 		print("Training completed.")
 
 		return rec_loss, val_loss, dis_loss, dis_cat_loss
 
-	# def train(self, graph=False, gene=None, val_split=0.2):
-	#
-	# 	"""Training of the semisupervised adversarial autoencoder.
-	#
-	# 	During the reconstruction phase the training of the generator proceeds with the
-	# 	discriminator weights frozen.
-	#
-	# 	:param graph:
-	# 		if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-	# 	:type graph: bool
-	# 	:param gene:
-	# 		selected gene
-	# 	:type gene: str
-	# 	:param val_split:
-	# 		fraction of the training data to be used as validation data
-	# 	:type val_split: float
-	# 	:return:
-	# 		lists containing reconstruction training loss, reconstruction validation loss,
-	# 		discriminator loss, and categorical discriminator loss at each epoch
-	# 	"""
-	#
-	# 	rec_loss = []
-	# 	val_loss = []  # validation loss
-	# 	dis_loss = []
-	# 	dis_cat_loss = []
-	#
-	# 	print("Start model training...")
-	#
-	# 	for epoch in range(self.epochs):
-	# 		np.random.shuffle(self.data)
-	#
-	# 		for i in range(int(len(self.data) / self.batch_size)):
-	# 			batch = self.data[i * self.batch_size:i * self.batch_size + self.batch_size]
-	#
-	# 			# Regularization phase
-	# 			real = np.random.uniform(0.0, 0.1, self.batch_size)
-	# 			fake = np.random.uniform(0.9, 1.0, self.batch_size)
-	#
-	# 			fake_pred = self.encoder.predict(batch)[2]
-	# 			real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-	# 			discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-	# 			discriminator_batch_y = np.concatenate([fake, real])
-	#
-	# 			discriminator_loss = self.discriminator.train_on_batch(x=discriminator_batch_x,
-	# 			                                                       y=discriminator_batch_y)
-	#
-	# 			print(self.discriminator.layers[1].get_weights())
-	#
-	# 			fake_pred_cat = self.encoder.predict(batch)[3]
-	# 			class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
-	# 			real_pred_cat = to_categorical(class_sample, num_classes=self.num_clusters).astype(int)
-	#
-	# 			discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
-	# 			discriminator_cat_batch_y = np.concatenate([fake, real])
-	#
-	# 			discriminator_cat_loss = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
-	# 			                                                               y=discriminator_cat_batch_y)
-	#
-	# 			# Reconstruction phase
-	# 			real = np.zeros((self.batch_size,), dtype=int)
-	# 			autoencoder_loss = self.autoencoder.train_on_batch(x=batch,
-	# 			                                                   y=[batch, real, real])
-	#
-	# 			autoencoder_val_loss = self.autoencoder.test_on_batch(x=batch,
-	# 			                                                      y=[batch, real, real])
-	#
-	# 			print(self.discriminator.layers[1].get_weights())
-	# 			print(self.autoencoder.layers[1].get_weights())
-	#
-	# 		# Update loss functions at the end of each epoch
-	# 		self.rec_loss = autoencoder_loss[1]
-	# 		self.gen_loss = autoencoder_val_loss[1]
-	# 		self.dis_loss = discriminator_loss[1]
-	# 		self.dis_cat_loss = discriminator_cat_loss[1]
-	#
-	# 		if ((epoch + 1) % 1 == 0):
-	#
-	# 			clear_output()
-	#
-	# 			print(
-	# 				"Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, validation loss: {3:.6f}, discriminator loss: {4:.6f}, cat. discriminator loss: {5:.6f}"
-	# 					.format(
-	# 					*[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss, self.dis_cat_loss])
-	# 			)
-	#
-	# 			if graph and (gene is not None):
-	# 				self.plot_umap(gene_selected=[gene], louvain=True)
-	#
-	# 		rec_loss.append(self.rec_loss)
-	# 		val_loss.append(self.gen_loss)
-	# 		dis_loss.append(self.dis_loss)
-	# 		dis_cat_loss.append(self.dis_cat_loss)
-	#
-	# 	print("Training completed.")
-	#
-	# 	return rec_loss, val_loss, dis_loss, dis_cat_loss
+
