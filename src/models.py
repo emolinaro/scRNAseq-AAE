@@ -2838,13 +2838,17 @@ class AAE5(Base):
 		dis_loss = []
 		dis_cat_loss = []
 
+		labels_code = to_categorical(self.labels).astype(int)
+
+		data_ = np.concatenate([self.data, labels_code], axis=1)
+
 		print("Start model training...")
 
 		for epoch in range(self.epochs):
-			np.random.shuffle(self.data)
+			np.random.shuffle(data_)
 
 			for i in range(int(len(self.data) / self.batch_size)):
-				batch = self.data[i * self.batch_size:i * self.batch_size + self.batch_size]
+				batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
 
 				# Regularization phase
 				real = np.random.uniform(0.0, 0.1, self.batch_size)
@@ -2863,7 +2867,6 @@ class AAE5(Base):
 				                                               validation_split=0.0,
 				                                               verbose=0)
 				self.discriminator.trainable = False
-				#print(self.discriminator.layers[1].get_weights())
 
 				fake_pred_cat = self.encoder.predict(batch)[3]
 				class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
@@ -2872,14 +2875,12 @@ class AAE5(Base):
 				discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
 				discriminator_cat_batch_y = np.concatenate([fake, real])
 
-				self.discriminator_cat.trainable = True
 				discriminator_cat_history = self.discriminator_cat.fit(x=discriminator_cat_batch_x,
 				                                                       y=discriminator_cat_batch_y,
 				                                                       epochs=1,
 				                                                       batch_size=self.batch_size,
 				                                                       validation_split=0.0,
 				                                                       verbose=0)
-				self.discriminator_cat.trainable = False
 
 				# Reconstruction phase
 				real = np.zeros((self.batch_size,), dtype=int)
@@ -2889,8 +2890,6 @@ class AAE5(Base):
 				                                           batch_size=self.batch_size,
 				                                           validation_split=val_split,
 				                                           verbose=0)
-
-				#print(self.discriminator.layers[1].get_weights())
 
 			# Update loss functions at the end of each epoch
 			self.rec_loss = autoencoder_history.history["loss"][0]
