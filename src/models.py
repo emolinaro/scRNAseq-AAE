@@ -2578,14 +2578,14 @@ class AAE5(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        #x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      # use_bias=False,
-                      # kernel_initializer=self.kernel_initializer
+                      kernel_initializer=self.kernel_initializer
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -2596,8 +2596,7 @@ class AAE5(Base):
 
         z0 = Dense(self.layers_enc_dim[-1],
                    name="H_z",
-                   # use_bias=False,
-                   # kernel_initializer=self.kernel_initializer
+                   kernel_initializer=self.kernel_initializer
                    )(x)
 
         z0 = BatchNormalization(name='BN_z')(z0)
@@ -2608,21 +2607,20 @@ class AAE5(Base):
 
         z_mean = Dense(self.latent_dim,
                        name='z_mean',
-                       # kernel_initializer=self.kernel_initializer,
-                       # bias_initializer=self.bias_initializer
+                       kernel_initializer=self.kernel_initializer,
+                       bias_initializer=self.bias_initializer
                        )(z0)
 
         z_log_var = Dense(self.latent_dim,
                           name='z_log_var',
-                          # kernel_initializer=self.kernel_initializer,
-                          # bias_initializer=self.bias_initializer
+                          kernel_initializer=self.kernel_initializer,
+                          bias_initializer=self.bias_initializer
                           )(z0)
 
         z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
         y0 = Dense(self.layers_enc_dim[-1],
                    name="H_y",
-                   use_bias=False,
                    kernel_initializer=self.kernel_initializer)(x)
 
         y0 = BatchNormalization(name='BN_y')(y0)
@@ -2633,8 +2631,8 @@ class AAE5(Base):
 
         y = Dense(self.num_clusters,
                   name='logits',
-                  # kernel_initializer=self.kernel_initializer,
-                  # bias_initializer=self.bias_initializer
+                  kernel_initializer=self.kernel_initializer,
+                  bias_initializer=self.bias_initializer
                   )(y0)
 
         y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(self.num_clusters,), name='y')(y)
@@ -2656,20 +2654,19 @@ class AAE5(Base):
         classes = Input(shape=(self.num_clusters,), name='y')
 
         decoder_input = concatenate([latent_input, classes], name='Z_y')
-
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
+        # x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      # use_bias=False,
-                      # kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_initializer=self.kernel_initializer,
+                      kernel_regularizer=regularizers.l2(self.l2_weight),
+                      activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2694,19 +2691,19 @@ class AAE5(Base):
 
         discr_input = Input(shape=(self.latent_dim,), name='Z')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        # x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      # use_bias=False,
-                      # kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_initializer=self.kernel_initializer,
+                      kernel_regularizer=regularizers.l2(self.l2_weight),
+                      activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2753,19 +2750,19 @@ class AAE5(Base):
 
         discr_input = Input(shape=(self.num_clusters,), name='y')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        # x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_cat_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      # use_bias=False,
-                      # kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_initializer=self.kernel_initializer,
+                      kernel_regularizer=regularizers.l2(self.l2_weight),
+                      activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2816,10 +2813,6 @@ class AAE5(Base):
         self.autoencoder.compile(optimizer=optimizer_ae,
                                  loss=['mse', 'binary_crossentropy', 'binary_crossentropy'],
                                  loss_weights=[0.99, 0.005, 0.005], )
-
-
-
-
 
     def train(self, graph=False, gene=None, val_split=0.2):
 
