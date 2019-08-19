@@ -877,8 +877,12 @@ class VAE(Base):
 
         return loss, val_loss
 
+##########################################
+############### VAE2 MODEL ###############
+##########################################
 class VAE2(Base):
     """ Unsupervised clustering with variational autoencoder model.
+        Model implemented with tf.keras module.
 
     Methods
     -------
@@ -1005,9 +1009,9 @@ class VAE2(Base):
         if filepath[-1] != "/":
             filepath = filepath + "/"
 
-        plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
-        plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
-        plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
+        tf.keras.utils.plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
+        tf.keras.utils.plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
+        tf.keras.utils.plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
 
         print("Model graphs saved.\n")
 
