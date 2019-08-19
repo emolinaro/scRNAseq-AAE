@@ -1339,7 +1339,7 @@ class AAE1(Base):
         latent_input = Input(shape=(self.latent_dim,), name='Z')
         discr_input = latent_input
 
-        x =  discr_input
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
@@ -1459,14 +1459,6 @@ class AAE1(Base):
             for i in range(int(len(self.data) / self.batch_size)):
                 batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
 
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
                 # Regularization phase
                 fake_pred = self.encoder.predict(batch)[2]
                 real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
@@ -1487,6 +1479,14 @@ class AAE1(Base):
                                                        batch_size=self.batch_size,
                                                        validation_split=val_split,
                                                        verbose=0)
+
+                # Reconstruction phase
+                autoencoder_history = self.autoencoder.fit(x=batch,
+                                                           y=batch,
+                                                           epochs=1,
+                                                           batch_size=self.batch_size,
+                                                           validation_split=val_split,
+                                                           verbose=0)
 
             # Update loss functions at the end of each epoch
             self.rec_loss = autoencoder_history.history["loss"][0]
@@ -1779,14 +1779,6 @@ class AAE2(Base):
                 batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
                 labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
 
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
                 # Regularization phase
                 fake_pred = self.encoder.predict(batch)[2]
                 real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
@@ -1808,6 +1800,14 @@ class AAE2(Base):
                                                        batch_size=self.batch_size,
                                                        validation_split=val_split,
                                                        verbose=0)
+
+                # Reconstruction phase
+                autoencoder_history = self.autoencoder.fit(x=batch,
+                                                           y=batch,
+                                                           epochs=1,
+                                                           batch_size=self.batch_size,
+                                                           validation_split=val_split,
+                                                           verbose=0)
 
             # Update loss functions at the end of each epoch
             self.rec_loss = autoencoder_history.history["loss"][0]
@@ -2103,14 +2103,6 @@ class AAE3(Base):
                 batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
                 labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
 
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=[batch, labels_],
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
                 # Regularization phase
                 fake_pred = self.encoder.predict(batch)[2]
                 real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
@@ -2131,6 +2123,14 @@ class AAE3(Base):
                                                        batch_size=self.batch_size,
                                                        validation_split=val_split,
                                                        verbose=0)
+
+                # Reconstruction phase
+                autoencoder_history = self.autoencoder.fit(x=[batch, labels_],
+                                                           y=batch,
+                                                           epochs=1,
+                                                           batch_size=self.batch_size,
+                                                           validation_split=val_split,
+                                                           verbose=0)
 
             # Update loss functions at the end of each epoch
             self.rec_loss = autoencoder_history.history["loss"][0]
@@ -2630,14 +2630,6 @@ class AAE4(Base):
                 batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
                 labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
 
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
                 # Regularization phase
                 fake_pred = self.encoder.predict(batch)[2]
                 real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
@@ -2672,6 +2664,15 @@ class AAE4(Base):
                                                        batch_size=self.batch_size,
                                                        validation_split=val_split,
                                                        verbose=0)
+
+                # Reconstruction phase
+                autoencoder_history = self.autoencoder.fit(x=batch,
+                                                           y=batch,
+                                                           epochs=1,
+                                                           batch_size=self.batch_size,
+                                                           validation_split=val_split,
+                                                           verbose=0)
+
 
             # Update loss functions at the end of each epoch
             self.rec_loss = autoencoder_history.history["loss"][0]
@@ -3728,14 +3729,6 @@ class AAE6(Base):
             for i in range(int(len(self.data) / self.batch_size)):
                 batch = self.data[i * self.batch_size:i * self.batch_size + self.batch_size]
 
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
                 # Regularization phase
                 fake_pred = self.encoder.predict(batch)[2]
                 real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
@@ -3771,6 +3764,14 @@ class AAE6(Base):
                                                        batch_size=self.batch_size,
                                                        validation_split=val_split,
                                                        verbose=0)
+
+                # Reconstruction phase
+                autoencoder_history = self.autoencoder.fit(x=batch,
+                                                           y=batch,
+                                                           epochs=1,
+                                                           batch_size=self.batch_size,
+                                                           validation_split=val_split,
+                                                           verbose=0)
 
             # Update loss functions at the end of each epoch
             self.rec_loss = autoencoder_history.history["loss"][0]
