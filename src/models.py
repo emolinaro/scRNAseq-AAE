@@ -726,7 +726,7 @@ class VAE(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -771,7 +771,7 @@ class VAE(Base):
 
         decoder_input = Input(shape=(self.latent_dim,), name='Z')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -782,7 +782,7 @@ class VAE(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -876,6 +876,7 @@ class VAE(Base):
         val_loss = vae_history.history["val_loss"]
 
         return loss, val_loss
+
 
 ##########################################
 ############### VAE2 MODEL ###############
@@ -1048,7 +1049,7 @@ class VAE2(Base):
 
         encoder_input = L.Input(shape=(self.original_dim,), name="X")
 
-        x = L.Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -1093,7 +1094,7 @@ class VAE2(Base):
 
         decoder_input = L.Input(shape=(self.latent_dim,), name='Z')
 
-        x = L.Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -1104,7 +1105,7 @@ class VAE2(Base):
                         kernel_regularizer=regularizers.l2(self.l2_weight),
                         activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1253,7 +1254,7 @@ class AAE1(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -1261,8 +1262,8 @@ class AAE1(Base):
                       name="H_" + str(i + 1),
                       use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_regularizer=regularizers.l2(self.l2_weight),
+                      activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -1300,7 +1301,7 @@ class AAE1(Base):
 
         decoder_input = Input(shape=(self.latent_dim,), name='Z')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -1311,7 +1312,7 @@ class AAE1(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1338,7 +1339,7 @@ class AAE1(Base):
         latent_input = Input(shape=(self.latent_dim,), name='Z')
         discr_input = latent_input
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x =  discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
@@ -1349,7 +1350,7 @@ class AAE1(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1502,7 +1503,7 @@ class AAE1(Base):
                 )
 
                 if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene])
+                    self.plot_umap(gene_selected=[gene], louvain=True)
 
             rec_loss.append(self.rec_loss)
             gen_loss.append(self.gen_loss)
@@ -1566,7 +1567,7 @@ class AAE2(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -1574,8 +1575,8 @@ class AAE2(Base):
                       name="H_" + str(i + 1),
                       use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_regularizer=regularizers.l2(self.l2_weight),
+                      activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -1613,7 +1614,7 @@ class AAE2(Base):
 
         decoder_input = Input(shape=(self.latent_dim,), name='Z')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -1624,7 +1625,7 @@ class AAE2(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1654,7 +1655,7 @@ class AAE2(Base):
         labels_input = Input(shape=(labels_dim + 1,), name='Labels')  # add one category for non-labeld data
         discr_input = concatenate([latent_input, labels_input], name='Z_Labels')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
@@ -1665,7 +1666,7 @@ class AAE2(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1823,7 +1824,7 @@ class AAE2(Base):
                 )
 
                 if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene])
+                    self.plot_umap(gene_selected=[gene], louvain=True)
 
             rec_loss.append(self.rec_loss)
             gen_loss.append(self.gen_loss)
@@ -1890,7 +1891,7 @@ class AAE3(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -1898,8 +1899,8 @@ class AAE3(Base):
                       name="H_" + str(i + 1),
                       use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_regularizer=regularizers.l2(self.l2_weight),
+                      activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -1942,7 +1943,7 @@ class AAE3(Base):
 
         decoder_input = concatenate([latent_input, labels_input], name='Z_Labels')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -1953,7 +1954,7 @@ class AAE3(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1980,7 +1981,7 @@ class AAE3(Base):
         latent_input = Input(shape=(self.latent_dim,), name='Z')
         discr_input = latent_input
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
@@ -1991,7 +1992,7 @@ class AAE3(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2146,7 +2147,7 @@ class AAE3(Base):
                 )
 
                 if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene])
+                    self.plot_umap(gene_selected=[gene], louvain=True)
 
             rec_loss.append(self.rec_loss)
             gen_loss.append(self.gen_loss)
@@ -2359,7 +2360,7 @@ class AAE4(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -2419,7 +2420,7 @@ class AAE4(Base):
 
         decoder_input = concatenate([latent_input, labels_input], name='Z_y')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -2430,7 +2431,7 @@ class AAE4(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2457,7 +2458,7 @@ class AAE4(Base):
         latent_input = Input(shape=(self.latent_dim,), name='Z')
         discr_input = latent_input
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
@@ -2468,7 +2469,7 @@ class AAE4(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2530,7 +2531,7 @@ class AAE4(Base):
         latent_input = Input(shape=(labels_dim,), name='y')
         discr_input = latent_input
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_cat_dim):
@@ -2689,7 +2690,7 @@ class AAE4(Base):
                 )
 
                 if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene])
+                    self.plot_umap(gene_selected=[gene], louvain=True)
 
             rec_loss.append(self.rec_loss)
             gen_loss.append(self.gen_loss)
@@ -3138,7 +3139,7 @@ class AAE5(Base):
                                  loss=['mse', 'binary_crossentropy', 'binary_crossentropy'],
                                  loss_weights=[0.99, 0.005, 0.005], )
 
-    def train(self, graph=False, gene=None, val_split=0.2):
+    def train(self, graph=False, gene=None):
 
         """Training of the semisupervised adversarial autoencoder.
 
@@ -3467,7 +3468,7 @@ class AAE6(Base):
 
         encoder_input = Input(shape=(self.original_dim,), name="X")
 
-        x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
+        x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
@@ -3526,7 +3527,7 @@ class AAE6(Base):
 
         decoder_input = concatenate([latent_input, classes_rotated], name='Z_yR')
 
-        x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
+        x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
@@ -3537,7 +3538,7 @@ class AAE6(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3563,7 +3564,7 @@ class AAE6(Base):
         latent_input = Input(shape=(self.latent_dim,), name='Z')
         discr_input = latent_input
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
@@ -3574,7 +3575,7 @@ class AAE6(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3633,7 +3634,7 @@ class AAE6(Base):
         latent_input = Input(shape=(self.num_clusters,), name='y')
         discr_input = latent_input
 
-        x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
+        x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_cat_dim):
@@ -3644,7 +3645,7 @@ class AAE6(Base):
                       kernel_regularizer=regularizers.l2(self.l2_weight),
                       activity_regularizer=regularizers.l1(self.l1_weight))(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
