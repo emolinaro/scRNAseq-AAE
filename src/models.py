@@ -233,8 +233,8 @@ class Base():
                  do_rate=0.1,
                  kernel_initializer='glorot_uniform',
                  bias_initializer='zeros',
-                 l2_weight=0.01,
-                 l1_weight=0.01,
+                 l2_weight=None,
+                 l1_weight=None,
                  batch_size=35,
                  epochs=50,
                  lr_dis=0.0001,
@@ -254,6 +254,14 @@ class Base():
         self.bias_initializer = bias_initializer
         self.l2_weight = l2_weight
         self.l1_weight = l1_weight
+        if self.l2_weight is None:
+            self.kernel_regularizer = None
+        else:
+            self.kernel_regularizer = regularizers.l2(self.l2_weight)
+        if self.l1_weight is None:
+            self.activity_regularizer = None
+        else:
+            self.activity_regularizer = regularizers.l1(self.l1_weight)
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr_dis = lr_dis
@@ -732,7 +740,6 @@ class VAE(Base):
         for i, nodes in enumerate(self.layers_enc_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer
                       )(x)
 
@@ -777,12 +784,12 @@ class VAE(Base):
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1102,10 +1109,11 @@ class VAE2(Base):
                         name="H_" + str(i + 1),
                         use_bias=False,
                         kernel_initializer=self.kernel_initializer,
-                        kernel_regularizer=regularizers.l2(self.l2_weight),
-                        activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            # x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1260,10 +1268,8 @@ class AAE1(Base):
         for i, nodes in enumerate(self.layers_enc_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight)
+                      bias_initializer=self.bias_initializer
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -1307,12 +1313,12 @@ class AAE1(Base):
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1332,8 +1338,6 @@ class AAE1(Base):
         :return:
             discriminator
         """
-        # TODO: check impact of kernel and activity regularizer
-
         optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
 
         latent_input = Input(shape=(self.latent_dim,), name='Z')
@@ -1345,12 +1349,12 @@ class AAE1(Base):
         for i, nodes in enumerate(self.layers_dis_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1573,10 +1577,10 @@ class AAE2(Base):
         for i, nodes in enumerate(self.layers_enc_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight)
+                      bias_initializer = self.bias_initializer,
+                      # kernel_regularizer=regularizers.l2(self.l2_weight),
+                      # activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -1610,8 +1614,6 @@ class AAE2(Base):
             decoder
         """
 
-        # TODO: check impact of kernel and activity regularizer
-
         decoder_input = Input(shape=(self.latent_dim,), name='Z')
 
         x = decoder_input
@@ -1620,12 +1622,12 @@ class AAE2(Base):
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1645,7 +1647,6 @@ class AAE2(Base):
         :return:
             discriminator
         """
-        # TODO: check impact of kernel and activity regularizer
 
         optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
 
@@ -1661,12 +1662,12 @@ class AAE2(Base):
         for i, nodes in enumerate(self.layers_dis_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1897,10 +1898,9 @@ class AAE3(Base):
         for i, nodes in enumerate(self.layers_enc_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight)
+                      # kernel_regularizer=regularizers.l2(self.l2_weight),
+                      # activity_regularizer=regularizers.l1(self.l1_weight)
                       )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -1934,8 +1934,6 @@ class AAE3(Base):
             decoder
         """
 
-        # TODO: check impact of kernel and activity regularizer
-
         labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
 
         latent_input = Input(shape=(self.latent_dim,), name='Z')
@@ -1949,12 +1947,12 @@ class AAE3(Base):
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -1974,7 +1972,6 @@ class AAE3(Base):
         :return:
             discriminator
         """
-        # TODO: check impact of kernel and activity regularizer
 
         optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
 
@@ -1987,12 +1984,12 @@ class AAE3(Base):
         for i, nodes in enumerate(self.layers_dis_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2366,7 +2363,6 @@ class AAE4(Base):
         for i, nodes in enumerate(self.layers_enc_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer)(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
@@ -2411,8 +2407,6 @@ class AAE4(Base):
             decoder
         """
 
-        # TODO: check impact of kernel and activity regularizer
-
         labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
 
         latent_input = Input(shape=(self.latent_dim,), name='Z')
@@ -2426,12 +2420,12 @@ class AAE4(Base):
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2451,7 +2445,6 @@ class AAE4(Base):
         :return:
             discriminator
         """
-        # TODO: check impact of kernel and activity regularizer
 
         optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
 
@@ -2464,12 +2457,12 @@ class AAE4(Base):
         for i, nodes in enumerate(self.layers_dis_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -2522,7 +2515,6 @@ class AAE4(Base):
             discriminator_cat
 
         """
-        # TODO: check impact of kernel and activity regularizer
 
         optimizer_dis = Adam(lr=self.lr_dis_cat, decay=self.dr_dis_cat)
 
@@ -2539,8 +2531,9 @@ class AAE4(Base):
                       name="H_" + str(i + 1),
                       use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
             x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -2988,11 +2981,11 @@ class AAE5(Base):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
                       )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3025,11 +3018,11 @@ class AAE5(Base):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
                       )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3084,11 +3077,11 @@ class AAE5(Base):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
                       )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3534,12 +3527,12 @@ class AAE6(Base):
         for i, nodes in enumerate(self.layers_dec_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3571,10 +3564,10 @@ class AAE6(Base):
         for i, nodes in enumerate(self.layers_dis_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
             # x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
@@ -3641,12 +3634,12 @@ class AAE6(Base):
         for i, nodes in enumerate(self.layers_dis_cat_dim):
             x = Dense(nodes,
                       name="H_" + str(i + 1),
-                      use_bias=False,
                       kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=regularizers.l2(self.l2_weight),
-                      activity_regularizer=regularizers.l1(self.l1_weight))(x)
+                      kernel_regularizer=self.kernel_regularizer,
+                      activity_regularizer=self.activity_regularizer
+                      )(x)
 
-            # x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = BatchNormalization(name='BN_' + str(i + 1))(x)
 
             x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
@@ -3721,13 +3714,17 @@ class AAE6(Base):
 
         val_split = 0.0
 
+        labels_code = to_categorical(self.labels).astype(int)
+
+        data_ = np.concatenate([self.data, labels_code], axis=1)
+
         print("Start model training...")
 
         for epoch in range(self.epochs):
-            np.random.shuffle(self.data)
+            np.random.shuffle(data_)
 
             for i in range(int(len(self.data) / self.batch_size)):
-                batch = self.data[i * self.batch_size:i * self.batch_size + self.batch_size]
+                batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
 
                 # Regularization phase
                 fake_pred = self.encoder.predict(batch)[2]
@@ -3789,7 +3786,7 @@ class AAE6(Base):
                 )
 
                 if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene])
+                    self.plot_umap(gene_selected=[gene], louvain=True)
 
             rec_loss.append(self.rec_loss)
             gen_loss.append(self.gen_loss)
