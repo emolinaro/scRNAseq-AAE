@@ -111,3 +111,4 @@ venv.bak/
 preprocessing_of_datasets/
 data/
 models/
+graphs/
