@@ -118,30 +118,18 @@ class Base():
         number of epochs during training
     lr_dis: float
         learning rate discriminator optimizer
-    lr_gen: float
-        learning rate generator optimizer
     lr_ae: float
         learning rate autoencoder optimizer
     dr_dis: float
         decay rate discriminator optimizer
-    dr_gen: float
-        decay rate generator optimizer
     dr_ae: float
         decay rate autoencoder optimizer
     encoder: keras.engine.training.Model
         encoder deep neural network
     decoder: keras.engine.training.Model
         decoder deep neural network
-    generator: keras.engine.training.Model
-        generator deep neural network
     discriminator: keras.engine.training.Model
         discriminator deep neural network
-    rec_loss: float
-        reconstruction loss
-    gen_loss: float
-        generator loss
-    dis_loss: float
-        discriminator loss
     data: numpy.ndarray
         matrix containing gene expression
     gene_list: list
@@ -182,10 +170,8 @@ class Base():
                  batch_size=35,
                  epochs=50,
                  lr_dis=0.0001,
-                 lr_gen=0.0001,
                  lr_ae=0.0002,
                  dr_dis=1e-6,
-                 dr_gen=1e-6,
                  dr_ae=1e-6):
 
         self.latent_dim = latent_dim
@@ -209,19 +195,13 @@ class Base():
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr_dis = lr_dis
-        self.lr_gen = lr_gen
         self.lr_ae = lr_ae
         self.dr_dis = dr_dis
-        self.dr_gen = dr_gen
         self.dr_ae = dr_ae
         self.encoder = None
         self.decoder = None
-        self.generator = None
         self.discriminator = None
         self.autoencoder = None
-        self.rec_loss = None
-        self.gen_loss = None
-        self.dis_loss = None
         self.data = None
         self.gene_list = None
         self.labels = None
@@ -257,8 +237,6 @@ class Base():
                                              range(len(self.layers_dis_dim))],
                                             'lr_dis',
                                             'dr_dis',
-                                            'lr_gen',
-                                            'dr_gen',
                                             ])
 
         self.dict["Value"] = np.hstack([self.batch_size,
@@ -277,8 +255,6 @@ class Base():
                                         self.layers_dis_dim,
                                         self.lr_dis,
                                         self.dr_dis,
-                                        self.lr_gen,
-                                        self.dr_gen
                                         ])
 
         self.dict["Description"] = np.hstack(["batch size",
@@ -300,8 +276,6 @@ class Base():
                                                range(len(self.layers_dis_dim))],
                                               "learning rate of discriminator",
                                               "decay rate of discriminator",
-                                              "learning rate of generator",
-                                              "decay rate of generator"
                                               ])
 
     def get_parameters(self):
@@ -376,11 +350,6 @@ class Base():
         print("\nAutoencoder Network")
         print("===================")
         self.autoencoder.summary()
-
-        print("\nGenerator Network")
-        print("=================")
-        # Freeze the discriminator weights during training of generator
-        self.generator.summary()
 
         print("\nDiscriminator Network")
         print("=====================")
@@ -1195,18 +1164,10 @@ class AAE2(Base):
         array containing the dimension of categorical discriminator network dense layers
     lr_dis_cat: float
         learning rate for categorical discriminator optimizer
-    lr_gen_cat: float
-        learning rate for categorical generator optimizer
     dr_dis_cat: float
         decay rate categorical discriminator optimizer
-    dr_gen_cat: float
-        decay rate categorical generator optimizer
     discriminator_cat: keras.engine.training.Model
         categorical discriminator deep neural network
-    generator_cat: keras.engine.training.Model
-        categorical generator deep neural network
-    dis_cat_loss: float
-        discriminator_cat loss
 
     Methods
     -------
@@ -1257,7 +1218,6 @@ class AAE2(Base):
                 "List of mandatory arguments: num_clusters, latent_dim, layers_enc_dim, layers_dec_dim, and layers_dis_dim.")
 
         self.discriminator_cat = None
-        self.generator_cat = None
         self.dis_cat_loss = None
 
         # update dictionary of internal parameters
