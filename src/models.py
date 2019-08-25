@@ -403,7 +403,6 @@ class Base():
         plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
         plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
         plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
-        plot_model(self.generator, to_file=filepath + "generator.png", show_shapes=True)
         plot_model(self.discriminator, to_file=filepath + "discriminator.png", show_shapes=True)
 
         print("Model graphs saved.\n")
@@ -500,7 +499,6 @@ class Base():
             filepath = filepath + "/"
 
         self.autoencoder.save(filepath + 'autoencoder.h5')
-        self.generator.save(filepath + 'generator.h5')
         self.discriminator.save(filepath + 'discriminator.h5')
         self.encoder.save(filepath + 'encoder.h5')
         self.decoder.save(filepath + 'decoder.h5')
@@ -828,7 +826,8 @@ class VAE(Base):
         print("Training completed.")
 
         # save models in h5 format
-        # (this is a workaround to avoid AttributrError due to multiple putputs of encoder net)
+        # this is a workaround to avoid AttributrError due to multiple putputs of encoder net
+        # the same trick is applied in the other models
 
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
@@ -1024,7 +1023,7 @@ class AAE1(Base):
 
         return discriminator
 
-    def _build_generator(self, input_encoder, compression, discriminator):
+    def _build_generator(self, compression, discriminator):
 
         """Build generator neural network.
 
@@ -1038,18 +1037,12 @@ class AAE1(Base):
             generator
         """
 
-        optimizer_gen = Adam(lr=self.lr_gen, decay=self.dr_gen)
-
         # keep discriminator weights frozen
         discriminator.trainable = False
 
         generation = discriminator(compression)
 
-        # instantiate and compile generator model
-        generator = Model(input_encoder, generation)
-        generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return generator
+        return generation
 
     def build_model(self):
 
@@ -1072,19 +1065,21 @@ class AAE1(Base):
         # build and compile discriminator
         self.discriminator = self._build_discriminator()
 
+        # build generator
+        compression = self.encoder(encoder_input)[2]
+        generation = self._build_generator(compression, self.discriminator)
+
         # build and compile autoencoder
-        real_input = encoder_input
-        compression = self.encoder(real_input)[2]
         reconstruction = self.decoder(compression)
-        self.autoencoder = Model(real_input, reconstruction, name='autoencoder')
-        self.autoencoder.compile(optimizer=optimizer_ae, loss='mse')
+        self.autoencoder = Model(encoder_input,
+                                 [reconstruction, generation],
+                                 name='autoencoder')
+        self.autoencoder.compile(optimizer=optimizer_ae,
+                                 loss=['mse', 'binary_crossentropy'],
+                                 loss_weights=[0.99, 0.01]
+                                 )
 
-        # build and compile generator model
-        self.generator = self._build_generator(real_input,
-                                               self.encoder(real_input)[2],
-                                               self.discriminator)
-
-    def train(self, graph=False, gene=None):
+    def train(self, graph=False, gene=None, log_dir="./results"):
 
         """Training of the Adversarial Autoencoder.
 
@@ -1097,1265 +1092,97 @@ class AAE1(Base):
         :param gene:
             selected gene
         :type gene: str
+        :param log_dir:
+            directory with exported model files and tensorboard checkpoints
+        :type log_dir: str
+
         :return:
             lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
         """
 
         rec_loss = []
-        gen_loss = []
         dis_loss = []
 
-        val_split = 0.0
+        if log_dir[-1] != "/":
+            log_dir = log_dir + "/"
 
-        labels_code = to_categorical(self.labels).astype(int)
+        steps = int(len(self.data) / self.batch_size)
+        batches = self.epochs * steps
 
-        data_ = np.concatenate([self.data, labels_code], axis=1)
+        for step in range(batches):
 
-        print("Start model training...")
+            ids = np.random.randint(0, self.data.shape[0], self.batch_size)
+            batch = self.data[ids]
 
-        for epoch in range(self.epochs):
-            np.random.shuffle(data_)
+            # Regularization phase
+            fake_pred = self.encoder.predict(batch)[2]
+            real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
+            discriminator_batch_x = np.concatenate([fake_pred, real_pred])
+            discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
+                                                    np.random.uniform(0.0, 0.1, self.batch_size)])
 
-            for i in range(int(len(self.data) / self.batch_size)):
-                batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
+            discriminator_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+                                                                      y=discriminator_batch_y)
+            dis_loss.append(discriminator_history[0])
 
-                # Regularization phase
-                fake_pred = self.encoder.predict(batch)[2]
-                real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-                discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-                discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+            # Reconstruction phase
+            real = np.zeros((self.batch_size,), dtype=int)
+            autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
+                                                                        y=[batch, real])
 
-                discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-                                                               y=discriminator_batch_y,
-                                                               epochs=1,
-                                                               batch_size=self.batch_size,
-                                                               validation_split=val_split,
-                                                               verbose=0)
+            rec_loss.append(autoencoder_train_history[0])
 
-                generator_history = self.generator.fit(x=batch,
-                                                       y=np.zeros(self.batch_size),
-                                                       epochs=1,
-                                                       batch_size=self.batch_size,
-                                                       validation_split=val_split,
-                                                       verbose=0)
+            if ((step+1) % steps == 0):
 
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
-            # Update loss functions at the end of each epoch
-            self.rec_loss = autoencoder_history.history["loss"][0]
-            self.gen_loss = generator_history.history["loss"][0]
-            self.dis_loss = discriminator_history.history["loss"][0]
-
-            if ((epoch + 1) % 10 == 0):
-
-                clear_output()
+                clear_output(wait=True)
 
                 print(
-                    "Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}".format(
-                        *[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss])
+                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}"
+                        .format(
+                        *[int((step + 1)/steps), self.epochs, rec_loss[0], dis_loss[0]])
                 )
 
                 if graph and (gene is not None):
                     self.plot_umap(gene_selected=[gene], louvain=True)
 
-            rec_loss.append(self.rec_loss)
-            gen_loss.append(self.gen_loss)
-            dis_loss.append(self.dis_loss)
-
         print("Training completed.")
 
-        return rec_loss, gen_loss, dis_loss
+        # save models in h5 format
+        makedirs(log_dir + 'models/', exist_ok=True)
+        self.export_model(log_dir + 'models/')
+
+        makedirs(log_dir + '/logs/projector/', exist_ok=True)
+        with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
+            np.savetxt(f, self.labels, fmt='%i')
+
+        self.encoder = load_model(log_dir + 'models/encoder.h5')
+
+        tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
+                                  batch_size=self.batch_size,
+                                  embeddings_freq=1,
+                                  write_graph=False,
+                                  embeddings_layer_names=['z_mean', 'Z'],
+                                  embeddings_metadata='metadata.tsv',
+                                  embeddings_data=self.data
+                                  )
+
+        data_compression = self.encoder.predict(self.data, batch_size=self.batch_size)[2]
+        self.encoder.compile(optimizer='adam', loss=[None, None, 'mse'])
+        self.encoder.fit(self.data,
+                         data_compression,
+                         batch_size=self.batch_size,
+                         callbacks=[tensorboard],
+                         epochs=1,
+                         verbose=0)
+        print("Latent space embedding completed.")
+
+        return rec_loss, dis_loss
 
 
 ##########################################
 ############### MODEL n.2 ################
 ##########################################
 class AAE2(Base):
-    """ Model incorporating label information in the adversarial regularization.
-
-    Methods
-    -------
-    get_parameters()
-        Print the list of network parameters
-    get_data(datapath)
-        Read data file and initialize cell gene counts, gene name list and cell subgroups
-    rescale_data()
-        Rescale gene expression data to zero mean and unit variance
-    get_summary(model)
-        print model summary
-    export_graph(model, filename)
-        save model graph to file
-    plot_umap(gene_selected, louvain=False)
-        plot the gene expression in the 2-D latent space using UMAP clustering algorithm
-    export_model(filepath)
-        export the network models in h5 format
-
-    Raises
-    ------
-    TypeError
-        If one of the following argument is null:  latent_dim, layers_enc_dim, layers_dec_dim, layers_dis_dim.
-    """
-
-    def __init__(self, **kwargs):
-        super(AAE2, self).__init__(**kwargs)
-
-        if self.latent_dim is None or \
-                self.layers_enc_dim is None or \
-                self.layers_dec_dim is None or \
-                self.layers_dis_dim is None:
-            raise TypeError(
-                "List of mandatory arguments: latent_dim, layers_enc_dim, layers_dec_dim, and layers_dis_dim.")
-
-    def _build_encoder(self):
-
-        """Build encoder neural network.
-
-        :return:
-            encoder
-        """
-        # NB: no kernel regularizer and activity regularizer
-        # TODO: implement: 1) DETERMINISTIC POSTERIOR Q(z|x); 2) UNIVERSAL APPROXIMATOR POSTERIOR
-
-        # GAUSSIAN POSTERIOR
-
-        encoder_input = Input(shape=(self.original_dim,), name="X")
-
-        x = encoder_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_enc_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      bias_initializer = self.bias_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        z_mean = Dense(self.latent_dim,
-                       name='z_mean',
-                       kernel_initializer=self.kernel_initializer,
-                       bias_initializer=self.bias_initializer)(x)
-
-        z_log_var = Dense(self.latent_dim,
-                          name='z_log_var',
-                          kernel_initializer=self.kernel_initializer,
-                          bias_initializer=self.bias_initializer)(x)
-
-        z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
-
-        # instantiate encoder model
-        encoder = Model(encoder_input, [z_mean, z_log_var, z], name='encoder')
-
-        return encoder
-
-    def _build_decoder(self):
-
-        """Build decoder neural network.
-
-        :return:
-            decoder
-        """
-
-        decoder_input = Input(shape=(self.latent_dim,), name='Z')
-
-        x = decoder_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dec_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
-
-        # instantiate decoder model
-        decoder = Model(decoder_input, x, name='decoder')
-
-        return decoder
-
-    def _build_discriminator(self):
-
-        """Build discriminator neural network.
-
-        :return:
-            discriminator
-        """
-
-        optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
-        labels_input = Input(shape=(labels_dim + 1,), name='Labels')  # add one category for non-labeld data
-        discr_input = concatenate([latent_input, labels_input], name='Z_Labels')
-
-        x = discr_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dis_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(1, activation='sigmoid', name="Check")(x)
-
-        # instantiate and compile discriminator model
-        discriminator = Model([latent_input, labels_input], x, name='discriminator')
-        discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return discriminator
-
-    def _build_generator(self, input_encoder, compression, discriminator):
-
-        """Build generator neural network.
-
-        :param input_encoder:
-            encoder input layer
-        :param compression:
-            encoder transformation
-        :param discriminator:
-            initialized discriminator model
-        :return:
-            generator
-        """
-
-        optimizer_gen = Adam(lr=self.lr_gen, decay=self.dr_gen)
-
-        # keep discriminator weights frozen
-        discriminator.trainable = False
-
-        generation = discriminator(compression)
-
-        # instantiate and compile generator model
-        generator = Model(input_encoder, generation)
-        generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return generator
-
-    def build_model(self):
-
-        """Build Adversarial Autoencoder model architecture.
-
-        """
-
-        optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        encoder_input = Input(shape=(self.original_dim,), name='X')
-        labels_input = Input(shape=(labels_dim + 1,), name='Labels')
-
-        # build encoder
-        self.encoder = self._build_encoder()
-
-        # build decoder
-        self.decoder = self._build_decoder()
-
-        # build and compile discriminator
-        self.discriminator = self._build_discriminator()
-
-        # build and compile autoencoder
-        real_input = encoder_input
-        compression = self.encoder(real_input)[2]
-        reconstruction = self.decoder(compression)
-        self.autoencoder = Model(real_input, reconstruction, name='autoencoder')
-        self.autoencoder.compile(optimizer=optimizer_ae, loss='mse')
-
-        # build and compile generator model
-        self.generator = self._build_generator([real_input, labels_input],
-                                               [self.encoder(real_input)[2], labels_input],
-                                               self.discriminator)
-
-    def train(self, graph=False, gene=None):
-
-        """Training of the Adversarial Autoencoder.
-
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
-
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :return:
-            lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
-        """
-
-        rec_loss = []
-        gen_loss = []
-        dis_loss = []
-
-        val_split = 0.0
-
-        labels_code = to_categorical(self.labels).astype(int)
-        labels_zeros = np.zeros((len(self.labels), 1))  # extra label for training points with unknown classes
-        labels_code = np.append(labels_code, labels_zeros, axis=1)
-
-        data_ = np.concatenate([self.data, labels_code], axis=1)
-
-        print("Start model training...")
-
-        for epoch in range(self.epochs):
-            np.random.shuffle(data_)
-
-            for i in range(int(len(self.data) / self.batch_size)):
-                batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
-                labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
-
-                # Regularization phase
-                fake_pred = self.encoder.predict(batch)[2]
-                real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-                discriminator_batch_x = [np.concatenate([fake_pred, real_pred]),
-                                         np.concatenate([labels_, labels_])]
-                discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                        np.random.uniform(0.0, 0.1, self.batch_size)])
-
-                discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-                                                               y=discriminator_batch_y,
-                                                               epochs=1,
-                                                               batch_size=self.batch_size,
-                                                               validation_split=val_split,
-                                                               verbose=0)
-
-                generator_history = self.generator.fit(x=[batch, labels_],
-                                                       y=np.zeros(self.batch_size),
-                                                       epochs=1,
-                                                       batch_size=self.batch_size,
-                                                       validation_split=val_split,
-                                                       verbose=0)
-
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
-            # Update loss functions at the end of each epoch
-            self.rec_loss = autoencoder_history.history["loss"][0]
-            self.gen_loss = generator_history.history["loss"][0]
-            self.dis_loss = discriminator_history.history["loss"][0]
-
-            if ((epoch + 1) % 10 == 0):
-
-                clear_output()
-
-                print(
-                    "Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}".format(
-                        *[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss])
-                )
-
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
-
-            rec_loss.append(self.rec_loss)
-            gen_loss.append(self.gen_loss)
-            dis_loss.append(self.dis_loss)
-
-        print("Training completed.")
-
-        return rec_loss, gen_loss, dis_loss
-
-
-##########################################
-############### MODEL n.3 ################
-##########################################
-class AAE3(Base):
-    """  Supervised adversarial autoencoder model.
-
-         The label information is disentangled from the hidden code by providing
-         a one-hot encoded vector to the generative model.
-
-    Methods
-    -------
-    get_parameters()
-        Print the list of network parameters
-    get_data(datapath)
-        Read data file and initialize cell gene counts, gene name list and cell subgroups
-    rescale_data()
-        Rescale gene expression data to zero mean and unit variance
-    get_summary(model)
-        print model summary
-    export_graph(model, filename)
-        save model graph to file
-    plot_umap(gene_selected, louvain=False)
-        plot the gene expression in the 2-D latent space using UMAP clustering algorithm
-    export_model(filepath)
-        export the network models in h5 format
-
-    Raises
-    ------
-    TypeError
-        If one of the following argument is null:  latent_dim, layers_enc_dim, layers_dec_dim, layers_dis_dim.
-    """
-
-    def __init__(self, **kwargs):
-        super(AAE3, self).__init__(**kwargs)
-
-        if self.latent_dim is None or \
-                self.layers_enc_dim is None or \
-                self.layers_dec_dim is None or \
-                self.layers_dis_dim is None:
-            raise TypeError(
-                "List of mandatory arguments: latent_dim, layers_enc_dim, layers_dec_dim, and layers_dis_dim.")
-
-    def _build_encoder(self):
-
-        """Build encoder neural network.
-
-        :return:
-            encoder
-        """
-        # NB: no kernel regularizer and activity regularizer
-        # TODO: implement: 1) DETERMINISTIC POSTERIOR Q(z|x); 2) UNIVERSAL APPROXIMATOR POSTERIOR
-
-        # GAUSSIAN POSTERIOR
-
-        encoder_input = Input(shape=(self.original_dim,), name="X")
-
-        x = encoder_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_enc_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      # kernel_regularizer=regularizers.l2(self.l2_weight),
-                      # activity_regularizer=regularizers.l1(self.l1_weight)
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        z_mean = Dense(self.latent_dim,
-                       name='z_mean',
-                       kernel_initializer=self.kernel_initializer,
-                       bias_initializer=self.bias_initializer)(x)
-
-        z_log_var = Dense(self.latent_dim,
-                          name='z_log_var',
-                          kernel_initializer=self.kernel_initializer,
-                          bias_initializer=self.bias_initializer)(x)
-
-        z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
-
-        # instantiate encoder model
-        encoder = Model(encoder_input, [z_mean, z_log_var, z], name='encoder')
-
-        return encoder
-
-    def _build_decoder(self):
-
-        """Build decoder neural network.
-
-        :return:
-            decoder
-        """
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
-        labels_input = Input(shape=(labels_dim,), name='Labels')
-
-        decoder_input = concatenate([latent_input, labels_input], name='Z_Labels')
-
-        x = decoder_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dec_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
-
-        # instantiate decoder model
-        decoder = Model([latent_input, labels_input], x, name='decoder')
-
-        return decoder
-
-    def _build_discriminator(self):
-
-        """Build discriminator neural network.
-
-        :return:
-            discriminator
-        """
-
-        optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
-
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
-        discr_input = latent_input
-
-        x = discr_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dis_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(1, activation='sigmoid', name="Check")(x)
-
-        # instantiate and compile discriminator model
-        discriminator = Model(latent_input, x, name='discriminator')
-        discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return discriminator
-
-    def _build_generator(self, input_encoder, compression, discriminator):
-
-        """Build generator neural network.
-
-        :param input_encoder:
-            encoder input layer
-        :param compression:
-            encoder transformation
-        :param discriminator:
-            initialized discriminator model
-        :return:
-            generator
-        """
-
-        optimizer_gen = Adam(lr=self.lr_gen, decay=self.dr_gen)
-
-        # keep discriminator weights frozen
-        discriminator.trainable = False
-
-        generation = discriminator(compression)
-
-        # instantiate and compile generator model
-        generator = Model(input_encoder, generation)
-        generator.compile(optimizer=optimizer_gen, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return generator
-
-    def build_model(self):
-
-        """Build Adversarial Autoencoder model architecture.
-
-        """
-
-        optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        encoder_input = Input(shape=(self.original_dim,), name='X')
-        labels_input = Input(shape=(labels_dim,), name='Labels')
-
-        # build encoder
-        self.encoder = self._build_encoder()
-
-        # build decoder
-        self.decoder = self._build_decoder()
-
-        # build and compile discriminator
-        self.discriminator = self._build_discriminator()
-
-        # build and compile autoencoder
-        real_input = encoder_input
-        compression = [self.encoder(real_input)[2], labels_input]
-        reconstruction = self.decoder(compression)
-        self.autoencoder = Model([real_input, labels_input], reconstruction, name='autoencoder')
-        self.autoencoder.compile(optimizer=optimizer_ae, loss='mse')
-
-        # build and compile generator model
-        self.generator = self._build_generator(real_input,
-                                               self.encoder(real_input)[2],
-                                               self.discriminator)
-
-    def train(self, graph=False, gene=None):
-
-        """Training of the Adversarial Autoencoder.
-
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
-
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :return:
-            lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
-        """
-
-        rec_loss = []
-        gen_loss = []
-        dis_loss = []
-
-        val_split = 0.0
-
-        labels_code = to_categorical(self.labels).astype(int)
-
-        data_ = np.concatenate([self.data, labels_code], axis=1)
-
-        print("Start model training...")
-
-        for epoch in range(self.epochs):
-            np.random.shuffle(data_)
-
-            for i in range(int(len(self.data) / self.batch_size)):
-                batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
-                labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
-
-                # Regularization phase
-                fake_pred = self.encoder.predict(batch)[2]
-                real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-                discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-                discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                        np.random.uniform(0.0, 0.1, self.batch_size)])
-
-                discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-                                                               y=discriminator_batch_y,
-                                                               epochs=1,
-                                                               batch_size=self.batch_size,
-                                                               validation_split=val_split,
-                                                               verbose=0)
-
-                generator_history = self.generator.fit(x=batch,
-                                                       y=np.zeros(self.batch_size),
-                                                       epochs=1,
-                                                       batch_size=self.batch_size,
-                                                       validation_split=val_split,
-                                                       verbose=0)
-
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=[batch, labels_],
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
-            # Update loss functions at the end of each epoch
-            self.rec_loss = autoencoder_history.history["loss"][0]
-            self.gen_loss = generator_history.history["loss"][0]
-            self.dis_loss = discriminator_history.history["loss"][0]
-
-            if ((epoch + 1) % 10 == 0):
-
-                clear_output()
-
-                print(
-                    "Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}".format(
-                        *[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss])
-                )
-
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
-
-            rec_loss.append(self.rec_loss)
-            gen_loss.append(self.gen_loss)
-            dis_loss.append(self.dis_loss)
-
-        print("Training completed.")
-
-        return rec_loss, gen_loss, dis_loss
-
-
-##########################################
-############### MODEL n.4 ################
-##########################################
-class AAE4(Base):
-    """ Semi-supervised adversarial autoencoder model with categorical distribution of classes labels.
-
-        The classes labels match the corresponsding data points.
-
-    Attributes
-    ----------
-    tau: float
-        temperature parameter used in the Gumbel-softmax trick
-    layers_dis_cat_dim: list
-        array containing the dimension of categorical discriminator network dense layers
-    lr_dis_cat: float
-        learning rate for categorical discriminator optimizer
-    lr_gen_cat: float
-        learning rate for categorical generator optimizer
-    dr_dis_cat: float
-        decay rate categorical discriminator optimizer
-    dr_gen_cat: float
-        decay rate categorical generator optimizer
-    discriminator_cat: keras.engine.training.Model
-        categorical discriminator deep neural network
-    generator_cat: keras.engine.training.Model
-        categorical generator deep neural network
-    dis_cat_loss: float
-        discriminator_cat loss
-
-    Methods
-    -------
-    get_parameters()
-        Print the list of network parameters
-    get_data(datapath)
-        Read data file and initialize cell gene counts, gene name list and cell subgroups
-    rescale_data()
-        Rescale gene expression data to zero mean and unit variance
-    get_summary(model)
-        print model summary
-    export_graph(model, filename)
-        save model graph to file
-    plot_umap(gene_selected, louvain=False)
-        plot the gene expression in the 2-D latent space using UMAP clustering algorithm
-    export_model(filepath)
-        export the network models in h5 format
-
-    Raises
-    ------
-    TypeError
-        If one of the following argument is null:  latent_dim, layers_enc_dim, layers_dec_dim, layers_dis_dim, layers_dis_cat_dim.
-    """
-
-    def __init__(self,
-                 tau=0.5,
-                 layers_dis_cat_dim=None,
-                 lr_dis_cat=0.0001,
-                 dr_dis_cat=1e-6,
-                 **kwargs):
-
-        self.tau = tau
-        self.layers_dis_cat_dim = layers_dis_cat_dim
-        self.lr_dis_cat = lr_dis_cat
-        self.dr_dis_cat = dr_dis_cat
-
-        Base.__init__(self, **kwargs)
-
-        if self.latent_dim is None or \
-                self.layers_enc_dim is None or \
-                self.layers_dec_dim is None or \
-                self.layers_dis_dim is None or \
-                self.layers_dis_cat_dim is None:
-            raise TypeError(
-                "List of mandatory arguments: latent_dim, layers_enc_dim, layers_dec_dim, and layers_dis_dim.")
-
-        self.discriminator_cat = None
-        self.generator_cat = None
-        self.dis_cat_loss = None
-
-        # update dictionary of internal parameters
-        self._update_dict()
-
-    def _update_dict(self):
-        """Update model dictionary of input parameters.
-
-        """
-
-        dict2 = {"Parameter": [], "Value": [], "Description": []}
-
-        dict2["Parameter"] = np.hstack(
-            [['layer_' + str(k + 1) + '_dis_cat_dim' for k in range(len(self.layers_dis_cat_dim))],
-             'lr_dis_cat',
-             'dr_dis_cat',
-             'tau'
-             ])
-
-        dict2["Value"] = np.hstack([self.layers_dis_cat_dim,
-                                    self.lr_dis_cat,
-                                    self.dr_dis_cat,
-                                    self.tau
-                                    ])
-
-        dict2["Description"] = np.hstack([["dimension of cat. discriminator dense layer " + str(k + 1) for k in
-                                           range(len(self.layers_dis_cat_dim))],
-                                          "learning rate of cat. discriminator",
-                                          "decay rate of cat. discriminator",
-                                          "temperature parameter"
-                                          ])
-
-        for k in self.dict.keys():
-            self.dict[k] = np.append(self.dict[k], dict2[k])
-
-    def get_summary(self):
-
-        """Print Adversarial Autoencoder model summary.
-
-        :return:
-        """
-
-        print("\nEncoder Network")
-        print("===============")
-        self.encoder.summary()
-
-        print("\nDecoder Network")
-        print("===============")
-        self.decoder.summary()
-
-        print("\nAutoencoder Network")
-        print("===================")
-        self.autoencoder.summary()
-
-        print("\nGenerator Network")
-        print("=================")
-        # Freeze the discriminator weights during training of generator
-        self.generator.summary()
-
-        print("\nDiscriminator Network")
-        print("=====================")
-        self.discriminator.trainable = True  # note: model already compiled with trainable weights
-        self.discriminator.summary()
-
-        print("\nCategorical Discriminator Network")
-        print("=================================")
-        self.discriminator_cat.trainable = True  # note: model already compiled with trainable weights
-        self.discriminator_cat.summary()
-
-    def export_graph(self, filepath):
-
-        """Save model graphs to PNG images.
-
-        :param filepath:
-             path of output image files
-        :type filepath: str
-        :return:
-        """
-
-        if filepath[-1] != "/":
-            filepath = filepath + "/"
-
-        plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
-        plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
-        plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
-        plot_model(self.generator, to_file=filepath + "generator.png", show_shapes=True)
-        plot_model(self.discriminator, to_file=filepath + "discriminator.png", show_shapes=True)
-        plot_model(self.discriminator_cat, to_file=filepath + "discriminator_cat.png", show_shapes=True)
-
-        print("Model graphs saved.\n")
-
-    def export_model(self, filepath):
-
-        """Export the network models in h5 format.
-
-        :param filepath:
-            path of model files
-        :type filepath: str
-        :return:
-        """
-
-        if filepath[-1] != "/":
-            filepath = filepath + "/"
-
-        self.autoencoder.save(filepath + 'autoencoder.h5')
-        self.generator.save(filepath + 'generator.h5')
-        self.discriminator.save(filepath + 'discriminator.h5')
-        self.discriminator_cat.save(filepath + 'discriminator_cat.h5')
-        self.encoder.save(filepath + 'encoder.h5')
-        self.decoder.save(filepath + 'decoder.h5')
-
-        print("All networks exported in h5 format.")
-
-    def _build_encoder(self):
-
-        """Build encoder neural network.
-
-        :return:
-            encoder
-        """
-        # NB: no kernel regularizer and activity regularizer
-
-        # GAUSSIAN POSTERIOR
-
-        encoder_input = Input(shape=(self.original_dim,), name="X")
-
-        x = encoder_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_enc_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer)(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        z_mean = Dense(self.latent_dim,
-                       name='z_mean',
-                       kernel_initializer=self.kernel_initializer,
-                       bias_initializer=self.bias_initializer)(x)
-
-        z_log_var = Dense(self.latent_dim,
-                          name='z_log_var',
-                          kernel_initializer=self.kernel_initializer,
-                          bias_initializer=self.bias_initializer)(x)
-
-        z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        y = Dense(labels_dim,
-                  name='logits',
-                  kernel_initializer=self.kernel_initializer,
-                  bias_initializer=self.bias_initializer)(x)
-
-        # y = Softmax(axis=-1, name='y')(y)
-
-        y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(labels_dim,), name='y')(y)
-
-        # instantiate encoder model
-        encoder = Model(encoder_input, [z_mean, z_log_var, z, y], name='encoder')
-
-        return encoder
-
-    def _build_decoder(self):
-
-        """Build decoder neural network.
-
-        :return:
-            decoder
-        """
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
-        labels_input = Input(shape=(labels_dim,), name='y')
-
-        decoder_input = concatenate([latent_input, labels_input], name='Z_y')
-
-        x = decoder_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dec_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
-
-        # instantiate decoder model
-        decoder = Model([latent_input, labels_input], x, name='decoder')
-
-        return decoder
-
-    def _build_discriminator(self):
-
-        """Build discriminator neural network.
-
-        :return:
-            discriminator
-        """
-
-        optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
-
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
-        discr_input = latent_input
-
-        x = discr_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dis_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(1, activation='sigmoid', name="Check")(x)
-
-        # instantiate and compile discriminator model
-        discriminator = Model(latent_input, x, name='discriminator')
-        discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return discriminator
-
-    def _build_generator(self, input_encoder, compression, compression_cat, discriminator, discriminator_cat):
-
-        """Build generator neural network.
-
-        :param input_encoder:
-            encoder input layer
-        :param compression:
-            encoder transformation
-        :param discriminator:
-            initialized discriminator model
-        :return:
-            generator
-        """
-
-        optimizer_gen = Adam(lr=self.lr_gen, decay=self.dr_gen)
-
-        # keep discriminator weights frozen
-        discriminator.trainable = False
-        discriminator_cat.trainable = False
-
-        generation = discriminator(compression)
-        generation_cat = discriminator_cat(compression_cat)
-
-        # instantiate and compile generator model
-        generator = Model(input_encoder, [generation, generation_cat])
-        generator.compile(optimizer=optimizer_gen,
-                          loss=["binary_crossentropy", "binary_crossentropy"],
-                          metrics=['accuracy', 'accuracy'])
-
-        return generator
-
-    def _build_discriminator_cat(self):
-
-        """Build categorical discriminator neural network.
-
-        :return:
-            discriminator_cat
-
-        """
-
-        optimizer_dis = Adam(lr=self.lr_dis_cat, decay=self.dr_dis_cat)
-
-        labels_dim = np.max(np.unique(self.labels)) + 1  # labels start from 0
-
-        latent_input = Input(shape=(labels_dim,), name='y')
-        discr_input = latent_input
-
-        x = discr_input
-
-        # add dense layers
-        for i, nodes in enumerate(self.layers_dis_cat_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      use_bias=False,
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
-
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
-
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
-
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
-
-        x = Dense(1, activation='sigmoid', name="Check")(x)
-
-        # instantiate and compile discriminator model
-        discriminator = Model(latent_input, x, name='discriminator_cat')
-        discriminator.compile(optimizer=optimizer_dis, loss="binary_crossentropy", metrics=['accuracy'])
-
-        return discriminator
-
-    def build_model(self):
-
-        """Build Adversarial Autoencoder model architecture.
-
-        """
-
-        optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
-
-        encoder_input = Input(shape=(self.original_dim,), name='X')
-
-        # build encoder
-        self.encoder = self._build_encoder()
-
-        # build decoder
-        self.decoder = self._build_decoder()
-
-        # build and compile discriminator
-        self.discriminator = self._build_discriminator()
-
-        # build and compile categorical discriminator
-        self.discriminator_cat = self._build_discriminator_cat()
-
-        # build and compile autoencoder
-        real_input = encoder_input
-        compression = [self.encoder(real_input)[2], self.encoder(real_input)[3]]
-        reconstruction = self.decoder(compression)
-        self.autoencoder = Model(real_input, reconstruction, name='autoencoder')
-        self.autoencoder.compile(optimizer=optimizer_ae, loss='mse')
-
-        # build and compile generator model
-        self.generator = self._build_generator(real_input,
-                                               self.encoder(real_input)[2],
-                                               self.encoder(real_input)[3],
-                                               self.discriminator,
-                                               self.discriminator_cat)
-
-    def train(self, graph=False, gene=None):
-
-        """Training of the semisupervised adversarial autoencoder.
-
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
-
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :return:
-            lists containing reconstruction loss, generator loss, discriminator loss,
-            categorical generator loss, and categorical discriminator loss at each epoch
-        """
-
-        rec_loss = []
-        gen_loss = []
-        dis_loss = []
-        dis_cat_loss = []
-
-        val_split = 0.0
-
-        labels_code = to_categorical(self.labels).astype(int)
-
-        data_ = np.concatenate([self.data, labels_code], axis=1)
-
-        print("Start model training...")
-
-        for epoch in range(self.epochs):
-            np.random.shuffle(data_)
-
-            for i in range(int(len(self.data) / self.batch_size)):
-                batch = data_[i * self.batch_size:i * self.batch_size + self.batch_size, :self.data.shape[1]]
-                labels_ = data_[i * self.batch_size:i * self.batch_size + self.batch_size, self.data.shape[1]:]
-
-                # Regularization phase
-                fake_pred = self.encoder.predict(batch)[2]
-                real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-                discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-                discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                        np.random.uniform(0.0, 0.1, self.batch_size)])
-
-                discriminator_history = self.discriminator.fit(x=discriminator_batch_x,
-                                                               y=discriminator_batch_y,
-                                                               epochs=1,
-                                                               batch_size=self.batch_size,
-                                                               validation_split=val_split,
-                                                               verbose=0)
-
-                fake_pred_cat = self.encoder.predict(batch)[3]
-                real_pred_cat = labels_
-
-                discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
-                discriminator_cat_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                            np.random.uniform(0.0, 0.1, self.batch_size)])
-
-                discriminator_cat_history = self.discriminator_cat.fit(x=discriminator_cat_batch_x,
-                                                                       y=discriminator_cat_batch_y,
-                                                                       epochs=1,
-                                                                       batch_size=self.batch_size,
-                                                                       validation_split=val_split,
-                                                                       verbose=0)
-
-                generator_history = self.generator.fit(x=batch,
-                                                       y=[np.zeros(self.batch_size), np.zeros(self.batch_size)],
-                                                       epochs=1,
-                                                       batch_size=self.batch_size,
-                                                       validation_split=val_split,
-                                                       verbose=0)
-
-                # Reconstruction phase
-                autoencoder_history = self.autoencoder.fit(x=batch,
-                                                           y=batch,
-                                                           epochs=1,
-                                                           batch_size=self.batch_size,
-                                                           validation_split=val_split,
-                                                           verbose=0)
-
-
-            # Update loss functions at the end of each epoch
-            self.rec_loss = autoencoder_history.history["loss"][0]
-            self.gen_loss = generator_history.history["loss"][0]
-            self.dis_loss = discriminator_history.history["loss"][0]
-            self.dis_cat_loss = discriminator_cat_history.history["loss"][0]
-
-            if ((epoch + 1) % 10 == 0):
-
-                clear_output()
-
-                print(
-                    "Epoch {0:d}/{1:d}, reconstruction loss: {2:.6f}, generation loss: {3:.6f}, discriminator loss: {4:.6f}, cat. discriminator loss: {5:.6f}"
-                        .format(
-                        *[epoch + 1, self.epochs, self.rec_loss, self.gen_loss, self.dis_loss, self.dis_cat_loss])
-                )
-
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
-
-            rec_loss.append(self.rec_loss)
-            gen_loss.append(self.gen_loss)
-            dis_loss.append(self.dis_loss)
-            dis_cat_loss.append(self.dis_cat_loss)
-
-        print("Training completed.")
-
-        return rec_loss, gen_loss, dis_loss, dis_cat_loss
-
-
-##########################################
-############### MODEL n.5 ################
-##########################################
-class AAE5(Base):
     """ Unsupervised adversarial autoencoder model with arebitrary number of clusters.
 
     Attributes
@@ -2787,7 +1614,8 @@ class AAE5(Base):
                                  name='autoencoder')
         self.autoencoder.compile(optimizer=optimizer_ae,
                                  loss=['mse', 'binary_crossentropy', 'binary_crossentropy'],
-                                 loss_weights=[0.99, 0.005, 0.005], )
+                                 loss_weights=[0.99, 0.005, 0.005]
+                                 )
 
     def train(self, graph=False, gene=None, log_dir="./results/"):
 
@@ -2805,6 +1633,10 @@ class AAE5(Base):
         :param val_split:
             fraction of the training data to be used as validation data
         :type val_split: float
+        :param log_dir:
+            directory with exported model files and tensorboard checkpoints
+        :type log_dir: str
+
         :return:
             lists containing reconstruction training loss, reconstruction validation loss,
             discriminator loss, and categorical discriminator loss at each epoch
@@ -2822,10 +1654,6 @@ class AAE5(Base):
 
         steps = int(len(self.data) / self.batch_size)
         batches = self.epochs * steps
-
-        # pbar = tqdm(range(batches))
-
-        # clear_output()
 
         for step in range(batches):
 
@@ -2883,7 +1711,6 @@ class AAE5(Base):
         print("Training completed.")
 
         # save models in h5 format
-
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
 
