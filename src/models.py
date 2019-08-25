@@ -315,7 +315,8 @@ class Base():
             self.labels = adata.obs['louvain'].values.astype(int).tolist()
         except:
             print("Louvain clustering not defined in this dataset.")
-            self.labels = None
+            # self.labels = None
+            self.labels = np.zeros((self.original_dim,), dtype=int)
 
         print("Dataset imported.")
 
