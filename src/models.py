@@ -1601,7 +1601,7 @@ class AAE2(Base):
         """
 
         rec_loss = []
-        val_loss = []
+        # val_loss = []
         dis_loss = []
         dis_cat_loss = []
 
@@ -1649,18 +1649,18 @@ class AAE2(Base):
                                                                         y=[batch, real, real])
             rec_loss.append(autoencoder_train_history[0])
 
-            autoencoder_test_history = self.autoencoder.test_on_batch(x=batch,
-                                                                      y=[batch, real, real])
-            val_loss.append(autoencoder_test_history[0])
+            # autoencoder_test_history = self.autoencoder.test_on_batch(x=batch,
+            #                                                           y=[batch, real, real])
+            # val_loss.append(autoencoder_test_history[0])
 
             if ((step+1) % steps == 0):
 
                 clear_output(wait=True)
 
                 print(
-                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, val. loss: {3:.6f}, dis. loss: {4:.6f}, cat. dis. loss: {5:.6f}"
+                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}, cat. dis. loss: {4:.6f}"
                         .format(
-                        *[int((step + 1)/steps), self.epochs, rec_loss[0], val_loss[0], dis_loss[0], dis_cat_loss[0]])
+                        *[int((step + 1)/steps), self.epochs, rec_loss[0], dis_loss[0], dis_cat_loss[0]])
                 )
 
                 if graph and (gene is not None):
@@ -1700,6 +1700,6 @@ class AAE2(Base):
                          verbose=0)
         print("Latent space embedding completed.")
 
-        return rec_loss, val_loss, dis_loss, dis_cat_loss
+        return rec_loss, dis_loss, dis_cat_loss
 
 
