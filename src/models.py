@@ -7,8 +7,6 @@ from keras import backend as K
 from keras.activations import softmax
 from keras.losses import mse
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
-import tensorflow as tf
-from tensorflow.keras import layers as L
 
 from IPython.display import clear_output
 from sklearn.preprocessing import StandardScaler
@@ -19,7 +17,6 @@ from umap import UMAP
 
 from scanpy import read_h5ad
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 from os.path import join
 from os import makedirs
 from keras.models import load_model
