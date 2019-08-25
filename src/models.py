@@ -20,6 +20,9 @@ from umap import UMAP
 from scanpy import read_h5ad
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from os.path import join
+from os import makedirs
+from keras.models import load_model
 
 
 def sampling(args):
@@ -412,7 +415,7 @@ class Base():
         scaler.fit(self.data)
         self.data = scaler.transform(self.data)
 
-        print("Gene expression data rescaled.")
+        print("Dataset rescaled.")
 
     def get_summary(self):
 
@@ -824,6 +827,7 @@ class VAE(Base):
         real_input = encoder_input
         compression = self.encoder(real_input)[2]
         reconstruction = self.decoder(compression)
+
         self.autoencoder = Model(real_input, reconstruction, name='autoencoder')
 
         # expected negative log-likelihood of the ii-th datapoint (reconstruction loss)
@@ -841,27 +845,29 @@ class VAE(Base):
         self.autoencoder.add_loss(ae_loss)
         self.autoencoder.compile(optimizer=optimizer_ae, metrics=['accuracy'])
 
-    def train(self, val_split=0.2):
+    def train(self, val_split=0.2, log_dir="./results/"):
 
         """Training of the Variational Autoencoder.
-
-            The training will stop if there is no change in the validation loss after 30 epochs.
+        The training will stop if there is no change in the validation loss after 30 epochs.
 
         :param val_split:
             fraction of data used for validation
         :type val_split: float
+        :param log_dir:
+            directory with exported model files and tensorboard checkpoints
+        :type log_dir: str
 
         :return:
             lists containing training loss and validation loss
         """
 
+        if log_dir[-1] != "/":
+            log_dir = log_dir + "/"
+
         print("Start model training...")
 
-        # def checkpoint(file):
-        #
-        # 	checkpoint = ModelCheckpoint(file, monitor='accuracy', save_weights_only=True, verbose=0)
-        #
-        # 	return checkpoint
+        makedirs(log_dir + 'logs/summaries/', exist_ok=True)
+        tensorboard = TensorBoard(log_dir=log_dir + 'logs/summaries/')
 
         vae_history = self.autoencoder.fit(self.data,
                                            epochs=self.epochs,
@@ -873,11 +879,44 @@ class VAE(Base):
                                                              verbose=0,
                                                              mode='min',
                                                              baseline=None,
-                                                             restore_best_weights=False)
+                                                             restore_best_weights=False),
+                                               tensorboard
                                            ],
                                            verbose=1)
 
         print("Training completed.")
+
+        # save models in h5 format
+        # (this is a workaround to avoid AttributrError due to multiple putputs of encoder net)
+
+        makedirs(log_dir + 'models/', exist_ok=True)
+        self.export_model(log_dir + 'models/')
+
+        makedirs(log_dir + '/logs/projector/', exist_ok=True)
+        with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
+            np.savetxt(f, self.labels, fmt='%i')
+
+        self.encoder = load_model(log_dir + 'models/encoder.h5')
+
+        tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
+                                  batch_size=self.batch_size,
+                                  embeddings_freq=1,
+                                  write_graph=False,
+                                  embeddings_layer_names=['z_mean', 'Z'],
+                                  embeddings_metadata='metadata.tsv',
+                                  embeddings_data=self.data
+                                  )
+
+        data_compression = self.encoder.predict(self.data, batch_size=self.batch_size)[2]
+        self.encoder.compile(optimizer='adam', loss=[None, None, 'mse'])
+        self.encoder.fit(self.data,
+                         data_compression,
+                         batch_size=self.batch_size,
+                         callbacks=[tensorboard],
+                         epochs=1,
+                         verbose=0)
+        print("Latent space embedding completed.")
+
 
         loss = vae_history.history["loss"]
         val_loss = vae_history.history["val_loss"]
