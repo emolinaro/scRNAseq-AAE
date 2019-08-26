@@ -171,6 +171,7 @@ class Base():
                  dr_dis=1e-6,
                  dr_ae=1e-6):
 
+        self.original_dim = None
         self.latent_dim = latent_dim
         self.layers_enc_dim = layers_enc_dim
         self.layers_dec_dim = layers_dec_dim
