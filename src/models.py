@@ -41,7 +41,6 @@ def sampling(args):
     epsilon = K.random_normal(shape=(batch, dim))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
 
-
 def sampling_gumbel(logits_y, tau):
     """Gumbel trick to sample from a discrete distribution.
 
@@ -473,6 +472,29 @@ class Base():
 
         print("All networks exported in h5 format.")
 
+    def update_labels(self, res=1.0):
+
+        """Cluster cells using the Louvain algorithm and update model labels
+
+        :param res:
+            resolution parameter (higher resolution means finding more and smaller clusters)
+        :type res: int
+        :return:
+        """
+        import scanpy as sc
+
+        latent = self.encoder.predict(self.data)[0]
+
+        Z = sc.AnnData(latent)
+
+        sc.tl.pca(Z, svd_solver='arpack')
+
+        sc.pp.neighbors(Z)
+
+        sc.tl.louvain(Z, resolution=res)
+
+        self.labels = Z.obs['louvain'].values.get_values().astype(int)
+
 
 ##########################################
 ############### VAE MODEL ################
@@ -752,7 +774,7 @@ class VAE(Base):
         self.autoencoder.add_loss(ae_loss)
         self.autoencoder.compile(optimizer=optimizer_ae, metrics=['accuracy'])
 
-    def train(self, val_split=0.2, log_dir="./results/"):
+    def train(self, val_split=0.2, update_labels=False, log_dir="./results/"):
 
         """Training of the Variational Autoencoder.
         The training will stop if there is no change in the validation loss after 30 epochs.
@@ -760,6 +782,9 @@ class VAE(Base):
         :param val_split:
             fraction of data used for validation
         :type val_split: float
+        :param update_labels:
+            if true, updates the labels using Louvain clustering algorithm on latent space
+        :type update_labels: bool
         :param log_dir:
             directory with exported model files and tensorboard checkpoints
         :type log_dir: str
@@ -799,6 +824,9 @@ class VAE(Base):
 
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
+
+        if update_labels:
+            self.update_labels()
 
         makedirs(log_dir + '/logs/projector/', exist_ok=True)
         with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
@@ -1047,7 +1075,7 @@ class AAE1(Base):
                                  loss_weights=[0.99, 0.01]
                                  )
 
-    def train(self, graph=False, gene=None, log_dir="./results"):
+    def train(self, graph=False, gene=None, update_labels=False, log_dir="./results"):
 
         """Training of the Adversarial Autoencoder.
 
@@ -1060,6 +1088,9 @@ class AAE1(Base):
         :param gene:
             selected gene
         :type gene: str
+        :param update_labels:
+            if true, updates the labels using Louvain clustering algorithm on latent space
+        :type update_labels: bool
         :param log_dir:
             directory with exported model files and tensorboard checkpoints
         :type log_dir: str
@@ -1118,6 +1149,9 @@ class AAE1(Base):
         # save models in h5 format
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
+
+        if update_labels:
+            self.update_labels()
 
         makedirs(log_dir + '/logs/projector/', exist_ok=True)
         with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
@@ -1576,7 +1610,7 @@ class AAE2(Base):
                                  loss_weights=[0.99, 0.005, 0.005]
                                  )
 
-    def train(self, graph=False, gene=None, log_dir="./results/"):
+    def train(self, graph=False, gene=None, update_labels=False, log_dir="./results/"):
 
         """Training of the semisupervised adversarial autoencoder.
 
@@ -1589,9 +1623,9 @@ class AAE2(Base):
         :param gene:
             selected gene
         :type gene: str
-        :param val_split:
-            fraction of the training data to be used as validation data
-        :type val_split: float
+        :param update_labels:
+            if true, updates the labels using Louvain clustering algorithm on latent space
+        :type update_labels: bool
         :param log_dir:
             directory with exported model files and tensorboard checkpoints
         :type log_dir: str
@@ -1672,6 +1706,9 @@ class AAE2(Base):
         # save models in h5 format
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
+
+        if update_labels:
+            self.update_labels()
 
         makedirs(log_dir + '/logs/projector/', exist_ok=True)
         with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
