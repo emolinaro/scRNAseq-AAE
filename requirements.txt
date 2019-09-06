@@ -16,7 +16,7 @@ tables
 bs4
 sklearn
 stemming
-scanpy
+scanpy==1.4.3
 scipy==1.2.0 # for scanpy
 python-igraph 
 louvain

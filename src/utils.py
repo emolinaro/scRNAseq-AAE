@@ -46,15 +46,19 @@ def _bytes_feature(value):
 	)
 
 
-def export_to_tfrecord(filepath, data, labels):
+def export_to_tfrecord(filepath, adata):
 	"""
-		Export dataset from h5ad format to tfrecord format.
+		Export dataset from h5ad format to TFRecord format.
 
 	"""
+
+	data = adata.X
+
+	dim = data.shape[0]
+
+	labels = adata.obs['louvain'].values.astype(int)
 
 	writer = tf.python_io.TFRecordWriter(filepath)
-
-	dim = len(labels)
 
 	for i in range(dim):
 		feature = {'data': _bytes_feature(tf.compat.as_bytes(data[i].tostring())),
