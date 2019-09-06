@@ -17,7 +17,7 @@ bs4
 sklearn
 stemming
 scanpy
-scipy>=1.3 # for scanpy
+scipy==1.2.0 # for scanpy
 python-igraph 
 louvain
 pydot
