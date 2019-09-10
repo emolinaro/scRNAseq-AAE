@@ -47,9 +47,17 @@ def _bytes_feature(value):
 
 
 def export_to_tfrecord(filepath, adata):
-	"""
-		Export dataset from h5ad format to TFRecord format.
+	"""Export dataset from h5ad format to TFRecord format.
 
+	   :param filepath:
+	          path of output file
+	   :type filepath: str
+
+	   :param adata:
+	          an annotated data matrix
+	   :type adata: AnnData object
+
+	   :return: TFRecord formatted file
 	"""
 
 	data = adata.X
@@ -69,3 +77,55 @@ def export_to_tfrecord(filepath, adata):
 		single = tf.train.Example(features=tf.train.Features(feature=feature))
 
 		writer.write(single.SerializeToString())
+
+
+def data_generator(filepath, batch_size=35, data_size=1000, epochs=200):
+	"""
+
+	:param filepath:
+	:param batch_size:
+	:param data_size:
+	:param epochs:
+	:return:
+	"""
+
+	def _parse_function(proto):
+		"""
+
+		:param proto:
+		:return:
+		"""
+		# define your tfrecord again. Remember that you saved your data as a string.
+		keys_to_features = {'data': tf.io.FixedLenFeature([], tf.string),
+		                    'label': tf.io.FixedLenFeature([], tf.int64)}
+
+		# Load one example
+		parsed_features = tf.io.parse_single_example(proto, keys_to_features)
+
+		# Turn saved data string into an array
+		parsed_features['data'] = tf.decode_raw(
+			parsed_features['data'], tf.float32)
+
+		return parsed_features['data']
+
+	# This works with arrays as well
+	dataset = tf.data.TFRecordDataset(filepath)
+
+	# Maps the parser on every filepath in the array. You can set the number of parallel loaders here
+	dataset = dataset.map(_parse_function, num_parallel_calls=1)
+
+	# This dataset will go on forever
+	dataset = dataset.repeat(epochs)
+
+	# Set the number of datapoints you want to load and shuffle
+	dataset = dataset.shuffle(data_size)
+
+	dataset = dataset.take(data_size)
+
+	# Set the batchsize
+	dataset = dataset.batch(batch_size)
+
+	# Create an iterator
+	# iterator = dataset.make_one_shot_iterator()
+
+	return dataset  # iterator
