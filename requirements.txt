@@ -10,15 +10,17 @@ tf-nightly
 Keras
 Keras-Applications
 Keras-Preprocessing
-matplotlib
+matplotlib==3.0.*
 seaborn
 tables
 bs4
 sklearn
 stemming
-scanpy==1.4.3
-scipy==1.2.0 # for scanpy
+scanpy==1.4.4.post1
+scipy==1.3.0 # for scanpy
 python-igraph 
-louvain
+louvain==0.6.1
 pydot
 IPython
+anndata==0.6.22.post1
+
