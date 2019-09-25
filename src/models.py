@@ -1224,7 +1224,35 @@ class AAE1(Base):
 		                         loss_weights=[0.99, 0.01]
 		                         )
 
-	def train(self, graph=False, gene=None, update_labels=False, log_dir="./results"):
+	def train_on_batch(self, batch):
+
+		"""Training function for one step.
+
+					:param batch:
+						batch of input data
+					:return:
+						discriminator and autoencoder loss functions
+					"""
+
+		# Regularization phase
+		fake_pred = self.encoder.predict(batch)[2]
+		real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
+		discriminator_batch_x = np.concatenate([fake_pred, real_pred])
+		discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
+		                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+
+		discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+		                                                                y=discriminator_batch_y)
+
+		# Reconstruction phase
+		real = np.zeros((self.batch_size,), dtype=int)
+		autoencoder_train_history = self.autoencoder.train_on_batch(x=batch, y=[batch, real])
+
+		return discriminator_train_history, autoencoder_train_history
+
+
+	def train(self, graph=False, gene=None, update_labels=False, log_dir="./results", mode='Internal',
+	          data_file=None):
 
 		"""Training of the Adversarial Autoencoder.
 
@@ -1243,6 +1271,12 @@ class AAE1(Base):
 		:param log_dir:
 			directory with exported model files and tensorboard checkpoints
 		:type log_dir: str
+		:param mode:
+			specify data cosumption during training
+		:type mode: str
+		:param data_file:
+			file with data saved in TFRecord format
+		:type data_file: str
 
 		:return:
 			lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
@@ -1254,31 +1288,46 @@ class AAE1(Base):
 		if log_dir[-1] != "/":
 			log_dir = log_dir + "/"
 
+		print("Start model training...")
+
 		steps = int(len(self.data) / self.batch_size)
 		batches = self.epochs * steps
 
+		if mode == 'Internal':
+			pass
+
+		elif mode == 'Dataset':
+			train_dataset = tf.data.Dataset.from_tensor_slices(self.data).repeat(self.epochs).shuffle(
+				len(self.data)).batch(self.batch_size).make_one_shot_iterator()
+			batch = train_dataset.get_next()
+
+		elif mode == 'TFRecord':
+			train_dataset = data_generator(data_file + '.train',
+			                               self.batch_size,
+			                               self.epochs,
+			                               is_training=True).make_one_shot_iterator()
+			batch = train_dataset.get_next()
+
+		# val_dataset = data_generator(data_file + '.val',
+		#                              self.batch_size,
+		#                              self.epochs,
+		#                              is_training=False)
+
+		else:
+			print("ERROR: mode not allowed. Possible choises: 'Internal', 'Dataset', 'TFRecord'.")
+			sys.exit(0)
+
 		for step in range(batches):
 
-			ids = np.random.randint(0, self.data.shape[0], self.batch_size)
-			batch = self.data[ids]
+			if mode == 'Internal':
+				ids = np.random.randint(0, self.data.shape[0], self.batch_size)
+				batch = self.data[ids]
 
-			# Regularization phase
-			fake_pred = self.encoder.predict(batch)[2]
-			real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-			discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-			discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-			                                        np.random.uniform(0.0, 0.1, self.batch_size)])
+			discriminator_history, autoencoder_history = self.train_on_batch(batch)
 
-			discriminator_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
-			                                                          y=discriminator_batch_y)
 			dis_loss.append(discriminator_history[0])
 
-			# Reconstruction phase
-			real = np.zeros((self.batch_size,), dtype=int)
-			autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
-			                                                            y=[batch, real])
-
-			rec_loss.append(autoencoder_train_history[0])
+			rec_loss.append(autoencoder_history[0])
 
 			if ((step + 1) % steps == 0):
 
@@ -1780,7 +1829,8 @@ class AAE2(Base):
 		                         loss_weights=[0.99, 0.005, 0.005]
 		                         )
 
-	def train(self, graph=False, gene=None, update_labels=False, log_dir="./results/"):
+	def train(self, graph=False, gene=None, update_labels=False, log_dir="./results/", mode='Internal',
+	          data_file=None):
 
 		"""Training of the semisupervised adversarial autoencoder.
 
@@ -1799,6 +1849,12 @@ class AAE2(Base):
 		:param log_dir:
 			directory with exported model files and tensorboard checkpoints
 		:type log_dir: str
+		:param mode:
+			specify data cosumption during training
+		:type mode: str
+		:param data_file:
+			file with data saved in TFRecord format
+		:type data_file: str
 
 		:return:
 			lists containing reconstruction training loss, reconstruction validation loss,
@@ -1817,10 +1873,38 @@ class AAE2(Base):
 		steps = int(len(self.data) / self.batch_size)
 		batches = self.epochs * steps
 
-		for step in range(batches):
+		if mode == 'Internal':
+			pass
 
-			ids = np.random.randint(0, self.data.shape[0], self.batch_size)
-			batch = self.data[ids]
+		elif mode == 'Dataset':
+			train_dataset = tf.data.Dataset.from_tensor_slices(self.data).repeat(self.epochs).shuffle(
+				len(self.data)).batch(self.batch_size).make_one_shot_iterator()
+			batch = train_dataset.get_next()
+
+		elif mode == 'TFRecord':
+			train_dataset = data_generator(data_file + '.train',
+			                               self.batch_size,
+			                               self.epochs,
+			                               is_training=True).make_one_shot_iterator()
+			batch = train_dataset.get_next()
+
+		# val_dataset = data_generator(data_file + '.val',
+		#                              self.batch_size,
+		#                              self.epochs,
+		#                              is_training=False)
+
+		else:
+			print("ERROR: mode not allowed. Possible choises: 'Internal', 'Dataset', 'TFRecord'.")
+			sys.exit(0)
+
+		def step_fn(batch):
+			"""Training function for one step.
+
+			:param batch:
+				batch of input data
+			:return:
+				discriminator, categorical discriminator, and autoencoder loss functions
+			"""
 
 			# Regularization phase
 			real = np.random.uniform(0.0, 0.1, self.batch_size)
@@ -1831,9 +1915,8 @@ class AAE2(Base):
 			discriminator_batch_x = np.concatenate([fake_pred, real_pred])
 			discriminator_batch_y = np.concatenate([fake, real])
 
-			discriminator_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
-			                                                          y=discriminator_batch_y)
-			dis_loss.append(discriminator_history[0])
+			discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+			                                                                y=discriminator_batch_y)
 
 			fake_pred_cat = self.encoder.predict(batch)[3]
 			class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
@@ -1842,15 +1925,29 @@ class AAE2(Base):
 			discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
 			discriminator_cat_batch_y = np.concatenate([fake, real])
 
-			discriminator_cat_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
-			                                                                  y=discriminator_cat_batch_y)
-			dis_cat_loss.append(discriminator_cat_history[0])
+			discriminator_cat_train_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
+			                                                                        y=discriminator_cat_batch_y)
 
 			# Reconstruction phase
 			real = np.zeros((self.batch_size,), dtype=int)
 			autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
 			                                                            y=[batch, real, real])
-			rec_loss.append(autoencoder_train_history[0])
+
+			return discriminator_train_history, discriminator_cat_train_history, autoencoder_train_history
+
+		for step in range(batches):
+
+			if mode == 'Internal':
+				ids = np.random.randint(0, self.data.shape[0], self.batch_size)
+				batch = self.data[ids]
+
+			discriminator_history, discriminator_cat_history, autoencoder_history = step_fn(batch)
+
+			dis_loss.append(discriminator_history[0])
+
+			dis_cat_loss.append(discriminator_cat_history[0])
+
+			rec_loss.append(autoencoder_history[0])
 
 			if ((step + 1) % steps == 0):
 
