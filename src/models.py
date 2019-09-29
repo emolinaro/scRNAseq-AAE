@@ -1189,6 +1189,7 @@ class AAE1(Base):
 
         return generation
 
+    
     def build_model(self):
 
         """Build Adversarial Autoencoder model architecture.
@@ -1224,19 +1225,22 @@ class AAE1(Base):
                                  loss_weights=[0.99, 0.01]
                                  )
 
-    def train_on_batch(self, batch):
+    def train_on_batch(self, input_batch, code):
 
         """Training function for one step.
 
-                    :param batch:
+                    :param input_batch:
                         batch of input data
                     :return:
                         discriminator and autoencoder loss functions
                     """
-
+        
+        batch = input_batch
+        
         # Regularization phase
-        fake_pred = self.encoder.predict(batch)[2]
-        real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
+        
+        fake_pred = code
+        real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  
         discriminator_batch_x = np.concatenate([fake_pred, real_pred])
         discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
                                                 np.random.uniform(0.0, 0.1, self.batch_size)])
@@ -1828,20 +1832,22 @@ class AAE2(Base):
                                  loss_weights=[0.99, 0.005, 0.005]
                                  )
 
-    def train_on_batch(self, batch):
+    def train_on_batch(self, input_batch):
         """Training function for one step.
 
-                    :param batch:
+                    :param input_batch:
                         batch of input data
                     :return:
                         discriminator, categorical discriminator, and autoencoder loss functions
                     """
-
+        
+        batch = input_batch
+        
         # Regularization phase
         real = np.random.uniform(0.0, 0.1, self.batch_size)
         fake = np.random.uniform(0.9, 1.0, self.batch_size)
 
-        fake_pred = self.encoder.predict(batch)[2]
+        fake_pred = self.encoder.predict(batch, steps=1)[2]
         real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
         discriminator_batch_x = np.concatenate([fake_pred, real_pred])
         discriminator_batch_y = np.concatenate([fake, real])
@@ -1849,7 +1855,7 @@ class AAE2(Base):
         discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
                                                                         y=discriminator_batch_y)
 
-        fake_pred_cat = self.encoder.predict(batch)[3]
+        fake_pred_cat = self.encoder.predict(batch, steps=1)[3]
         class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
         real_pred_cat = to_categorical(class_sample, num_classes=self.num_clusters).astype(int)
 
