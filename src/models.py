@@ -1314,8 +1314,8 @@ class AAE1(Base):
                 per_replica_dis_losses, per_replica_auto_losses = strategy.experimental_run_v2(self.train_step, 
                                                                                                args=(one_batch,))
                 
-                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_dis_losses, axis=0) 
-                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_auto_losses, axis=0)
+                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_dis_losses[0]], axis=0) 
+                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_auto_losses[0]], axis=0)
                 
                 num_train_batches += 1
 
@@ -1858,7 +1858,7 @@ class AAE2(Base):
 
             discriminator_cat_train_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
                                                                                     y=discriminator_cat_batch_y)
-
+            
             # Reconstruction phase
             real = np.zeros((self.batch_size,), dtype=int)
             autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
@@ -1921,10 +1921,10 @@ class AAE2(Base):
             for one_batch in ds:
             
                 per_replica_dis_losses, per_replica_dis_cat_losses, per_replica_auto_losses = strategy.experimental_run_v2(self.train_step,args=(one_batch,))
-                
-                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_dis_losses, axis=0) 
-                total_dis_cat_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_dis_cat_losses, axis=0)
-                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_auto_losses, axis=0)
+           
+                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_dis_losses[0]], axis=0) 
+                total_dis_cat_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_dis_cat_losses[0]], axis=0)
+                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_auto_losses[0]], axis=0)
                 
                 num_train_batches += 1
 
@@ -1976,178 +1976,3 @@ class AAE2(Base):
 
         return rec_loss, dis_loss, dis_cat_loss
                
-        
-    def train_on_batch(self, input_batch):
-        """Training function for one step.
-
-                    :param input_batch:
-                        batch of input data
-                    :return:
-                        discriminator, categorical discriminator, and autoencoder loss functions
-                    """
-        
-        batch = input_batch
-        
-        # Regularization phase
-        real = np.random.uniform(0.0, 0.1, self.batch_size)
-        fake = np.random.uniform(0.9, 1.0, self.batch_size)
-
-        fake_pred = self.encoder.predict(batch, steps=1)[2]
-        real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-        discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-        discriminator_batch_y = np.concatenate([fake, real])
-
-        discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
-                                                                        y=discriminator_batch_y)
-
-        fake_pred_cat = self.encoder.predict(batch, steps=1)[3]
-        class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
-        real_pred_cat = to_categorical(class_sample, num_classes=self.num_clusters).astype(int)
-
-        discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
-        discriminator_cat_batch_y = np.concatenate([fake, real])
-
-        discriminator_cat_train_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
-                                                                                y=discriminator_cat_batch_y)
-
-        # Reconstruction phase
-        real = np.zeros((self.batch_size,), dtype=int)
-        autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
-                                                                    y=[batch, real, real])
-
-        return discriminator_train_history, discriminator_cat_train_history, autoencoder_train_history
-
-
-    def train(self, graph=False, gene=None, update_labels=False, log_dir="./results/", mode='Internal',
-              data_file=None):
-
-        """Training of the semisupervised adversarial autoencoder.
-
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
-
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :param update_labels:
-            if true, updates the labels using Louvain clustering algorithm on latent space
-        :type update_labels: bool
-        :param log_dir:
-            directory with exported model files and tensorboard checkpoints
-        :type log_dir: str
-        :param mode:
-            specify data cosumption during training
-        :type mode: str
-        :param data_file:
-            file with data saved in TFRecord format
-        :type data_file: str
-
-        :return:
-            lists containing reconstruction training loss, reconstruction validation loss,
-            discriminator loss, and categorical discriminator loss at each epoch
-        """
-
-        rec_loss = []
-        dis_loss = []
-        dis_cat_loss = []
-
-        if log_dir[-1] != "/":
-            log_dir = log_dir + "/"
-
-        print("Start model training...")
-
-        steps = int(len(self.data) / self.batch_size)
-        batches = self.epochs * steps
-
-        if mode == 'Internal':
-            pass
-
-        elif mode == 'Dataset':
-            train_dataset = tf.data.Dataset.from_tensor_slices(self.data).repeat(self.epochs).shuffle(
-                len(self.data)).batch(self.batch_size).make_one_shot_iterator()
-            batch = train_dataset.get_next()
-
-        elif mode == 'TFRecord':
-            train_dataset = data_generator(data_file + '.train',
-                                           self.batch_size,
-                                           self.epochs,
-                                           is_training=True).make_one_shot_iterator()
-            batch = train_dataset.get_next()
-
-        # val_dataset = data_generator(data_file + '.val',
-        #                              self.batch_size,
-        #                              self.epochs,
-        #                              is_training=False)
-
-        else:
-            print("ERROR: mode not allowed. Possible choises: 'Internal', 'Dataset', 'TFRecord'.")
-            sys.exit(0)
-
-        for step in range(batches):
-
-            if mode == 'Internal':
-                ids = np.random.randint(0, self.data.shape[0], self.batch_size)
-                batch = self.data[ids]
-
-            discriminator_history, discriminator_cat_history, autoencoder_history = self.train_on_batch(batch)
-
-            dis_loss.append(discriminator_history[0])
-
-            dis_cat_loss.append(discriminator_cat_history[0])
-
-            rec_loss.append(autoencoder_history[0])
-
-            if ((step + 1) % steps == 0):
-
-                clear_output(wait=True)
-
-                print(
-                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}, cat. dis. loss: {4:.6f}"
-                        .format(
-                        *[int((step + 1) / steps), self.epochs, rec_loss[0], dis_loss[0], dis_cat_loss[0]])
-                )
-
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
-
-        print("Training completed.")
-
-        # save models in h5 format
-        makedirs(log_dir + 'models/', exist_ok=True)
-        self.export_model(log_dir + 'models/')
-
-        if update_labels:
-            self.update_labels()
-
-        # makedirs(log_dir + '/logs/projector/', exist_ok=True)
-        # with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
-        # 	np.savetxt(f, self.labels, fmt='%i')
-        #
-        # self.encoder = load_model(log_dir + 'models/encoder.h5')
-        #
-        # tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
-        #                           batch_size=self.batch_size,
-        #                           embeddings_freq=1,
-        #                           write_graph=False,
-        #                           embeddings_layer_names=['z_mean', 'Z'],
-        #                           embeddings_metadata='metadata.tsv',
-        #                           embeddings_data=self.data
-        #                           )
-        #
-        # res = self.encoder.predict(self.data, batch_size=self.batch_size)
-        # data_compression = res[2]
-        # categories = res[3]
-        # self.encoder.compile(optimizer='adam',
-        #                      loss=[None, None, 'mse', 'binary_crossentropy'])
-        # self.encoder.fit(self.data,
-        #                  [data_compression, categories],
-        #                  batch_size=self.batch_size,
-        #                  callbacks=[tensorboard],
-        #                  epochs=1,
-        #                  verbose=0)
-        # print("Latent space embedding completed.")
-
-        return rec_loss, dis_loss, dis_cat_loss
