@@ -1224,8 +1224,9 @@ class AAE1(Base):
                                  loss=['mse', 'binary_crossentropy'],
                                  loss_weights=[0.99, 0.01]
                                  )
+        
 
-    def train_on_batch(self, input_batch, code):
+    def train_step(self, input_batch):
 
         """Training function for one step.
 
@@ -1233,120 +1234,125 @@ class AAE1(Base):
                         batch of input data
                     :return:
                         discriminator and autoencoder loss functions
-                    """
+        """
         
         batch = input_batch
         
-        # Regularization phase
+        with tf.GradientTape() as tape:
         
-        fake_pred = code
-        real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  
-        discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-        discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                np.random.uniform(0.0, 0.1, self.batch_size)])
+            # Regularization phase
+            encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('Z').output)
+        
+            fake_pred = encoder_model(batch)
+            real_pred = tf.random.normal((self.batch_size, self.latent_dim))  
+            discriminator_batch_x = tf.concat([fake_pred, real_pred], axis=0)
+            discriminator_batch_y = tf.concat([tf.random.uniform([self.batch_size], minval=0.9, maxval=1.0),
+                                               tf.random.uniform([self.batch_size], minval=0.0, maxval=0.1)], axis=0)
 
-        discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
-                                                                        y=discriminator_batch_y)
+            discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+                                                                            y=discriminator_batch_y)
 
-        # Reconstruction phase
-        real = np.zeros((self.batch_size,), dtype=int)
-        autoencoder_train_history = self.autoencoder.train_on_batch(x=batch, y=[batch, real])
+            # Reconstruction phase
+            real = np.zeros((self.batch_size,), dtype=int)
+            autoencoder_train_history = self.autoencoder.train_on_batch(x=batch, y=[batch, real])
 
         return discriminator_train_history, autoencoder_train_history
-
-    def train(self, graph=False, gene=None, update_labels=False, log_dir="./results", mode='Internal',
-              data_file=None):
-
+    
+    
+    def distributed_train(self, train_dist_dataset, strategy, 
+                          enable_function=True, graph=False, gene=None, update_labels=False, 
+                          log_dir="./results"):
+        
         """Training of the Adversarial Autoencoder.
 
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
+            During the reconstruction phase the training of the generator proceeds with the
+            discriminator weights frozen.
 
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :param update_labels:
-            if true, updates the labels using Louvain clustering algorithm on latent space
-        :type update_labels: bool
-        :param log_dir:
-            directory with exported model files and tensorboard checkpoints
-        :type log_dir: str
-        :param mode:
-            specify data cosumption during training
-        :type mode: str
-        :param data_file:
-            file with data saved in TFRecord format
-        :type data_file: str
+            :param train_dist_dataset:
+                train dataset
+            :type train_dist_dataset:
+                tensorflow distribute dataset object
+            :param startegy:
+                distribute strategy
+            :type strategy:
+                tensorflow distributy startegy object
+            :param enable_function:
+                If True, wraps the train_step and test_step in tf.function
+            :type enable_function:
+                bool
+            :param graph:
+                if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
+            :type graph: 
+                bool
+            :param gene:
+                selected gene
+            :type gene: str
+            :param update_labels:
+               if true, updates the labels using Louvain clustering algorithm on latent space
+            :type update_labels: bool
+            :param log_dir:
+                directory with exported model files and tensorboard checkpoints
+            :type log_dir: str
 
-        :return:
-            lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
+            :return:
+                lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
+        
         """
-
-        rec_loss = []
+        
         dis_loss = []
+        rec_loss = []
+        
+        def distributed_train_epoch(ds):
+            
+            total_dis_loss = 0.0
+            total_auto_loss = 0.0
+            num_train_batches = 0.0
+            
+            for one_batch in ds:
+            
+                per_replica_dis_losses, per_replica_auto_losses = strategy.experimental_run_v2(self.train_step, 
+                                                                                               args=(one_batch,))
+                
+                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_dis_losses, axis=0) 
+                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_auto_losses, axis=0)
+                
+                num_train_batches += 1
 
-        if log_dir[-1] != "/":
-            log_dir = log_dir + "/"
-
+            return total_dis_loss, total_auto_loss, num_train_batches
+        
+        
+        if enable_function:
+            distributed_train_epoch = tf.function(distributed_train_epoch)
+            
+        
         print("Start model training...")
-
-        steps = int(len(self.data) / self.batch_size)
-        batches = self.epochs * steps
-
-        if mode == 'Internal':
-            pass
-
-        elif mode == 'Dataset':
-            train_dataset = tf.data.Dataset.from_tensor_slices(self.data).repeat(self.epochs).shuffle(
-                len(self.data)).batch(self.batch_size).make_one_shot_iterator()
-            batch = train_dataset.get_next()
-
-        elif mode == 'TFRecord':
-            train_dataset = data_generator(data_file + '.train',
-                                           self.batch_size,
-                                           self.epochs,
-                                           is_training=True).make_one_shot_iterator()
-            batch = train_dataset.get_next()
-
-        # val_dataset = data_generator(data_file + '.val',
-        #                              self.batch_size,
-        #                              self.epochs,
-        #                              is_training=False)
-
-        else:
-            print("ERROR: mode not allowed. Possible choises: 'Internal', 'Dataset', 'TFRecord'.")
-            sys.exit(0)
-
-        for step in range(batches):
-
-            if mode == 'Internal':
-                ids = np.random.randint(0, self.data.shape[0], self.batch_size)
-                batch = self.data[ids]
-
-            discriminator_history, autoencoder_history = self.train_on_batch(batch)
-
-            dis_loss.append(discriminator_history[0])
-
-            rec_loss.append(autoencoder_history[0])
-
-            if ((step + 1) % steps == 0):
-
-                clear_output(wait=True)
-
-                print(
-                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}"
-                        .format(
-                        *[int((step + 1) / steps), self.epochs, rec_loss[0], dis_loss[0]])
-                )
-
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
-
+        
+        for epoch in range(self.epochs):
+            
+            train_dis_loss, train_auto_loss, num_train_batches = distributed_train_epoch(train_dist_dataset)
+            
+            train_dis_loss = train_dis_loss / num_train_batches
+            train_auto_loss = train_auto_loss / num_train_batches
+            
+            dis_loss.append(train_dis_loss.numpy())
+            rec_loss.append(train_auto_loss.numpy())
+            
+            message = ("Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}")
+                
+            clear_output(wait=True)
+        
+            print(message.format(
+                                 *[epoch+1, self.epochs, train_auto_loss.numpy(), train_dis_loss.numpy()]
+                                )
+                 )
+            
+            if graph and (gene is not None):
+                self.plot_umap(gene_selected=[gene], louvain=True)
+                
         print("Training completed.")
 
+            
         # save models in h5 format
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
@@ -1354,34 +1360,10 @@ class AAE1(Base):
         if update_labels:
             self.update_labels()
 
-        # makedirs(log_dir + '/logs/projector/', exist_ok=True)
-        # with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
-        # 	np.savetxt(f, self.labels, fmt='%i')
-        #
-        # self.encoder = load_model(log_dir + 'models/encoder.h5')
-        #
-        # tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
-        #                           batch_size=self.batch_size,
-        #                           embeddings_freq=1,
-        #                           write_graph=False,
-        #                           embeddings_layer_names=['z_mean', 'Z'],
-        #                           embeddings_metadata='metadata.tsv',
-        #                           embeddings_data=self.data
-        #                           )
-        #
-        # data_compression = self.encoder.predict(self.data, batch_size=self.batch_size)[2]
-        # self.encoder.compile(optimizer='adam', loss=[None, None, 'mse'])
-        # self.encoder.fit(self.data,
-        #                  data_compression,
-        #                  batch_size=self.batch_size,
-        #                  callbacks=[tensorboard],
-        #                  epochs=1,
-        #                  verbose=0)
-        # print("Latent space embedding completed.")
-
         return rec_loss, dis_loss
+       
 
-
+        
 ##########################################
 ############### MODEL n.2 ################
 ##########################################
@@ -1832,6 +1814,169 @@ class AAE2(Base):
                                  loss_weights=[0.99, 0.005, 0.005]
                                  )
 
+        
+    def train_step(self, input_batch):
+
+        """Training function for one step.
+
+                    :param input_batch:
+                        batch of input data
+                    :return:
+                        discriminator, categorical discriminator, and autoencoder loss functions
+        """
+        
+        batch = input_batch
+        
+        with tf.GradientTape() as tape:
+            
+            
+            real = tf.random.uniform([self.batch_size], minval=0.0, maxval=0.1)
+            fake = tf.random.uniform([self.batch_size], minval=0.9, maxval=1.0)
+            
+            
+            # Regularization phase
+            encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('Z').output)
+        
+            fake_pred = encoder_model(batch)
+            real_pred = tf.random.normal((self.batch_size, self.latent_dim))  
+            discriminator_batch_x = tf.concat([fake_pred, real_pred], axis=0)
+            discriminator_batch_y = tf.concat([fake, real], axis=0)
+
+            discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+                                                                            y=discriminator_batch_y)
+            
+            encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('y').output)
+            
+            fake_pred_cat = encoder_model(batch)
+            class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
+            real_pred_cat = tf.convert_to_tensor(to_categorical(class_sample, num_classes=self.num_clusters))
+
+            discriminator_cat_batch_x = tf.concat([fake_pred_cat, real_pred_cat], axis=0)
+            discriminator_cat_batch_y = tf.concat([fake, real], axis=0)
+
+            discriminator_cat_train_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
+                                                                                    y=discriminator_cat_batch_y)
+
+            # Reconstruction phase
+            real = np.zeros((self.batch_size,), dtype=int)
+            autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
+                                                                        y=[batch, real, real])
+            
+        return discriminator_train_history, discriminator_cat_train_history, autoencoder_train_history
+    
+    
+    def distributed_train(self, train_dist_dataset, strategy, 
+                          enable_function=True, graph=False, gene=None, update_labels=False, 
+                          log_dir="./results"):
+        
+        """Training of the Adversarial Autoencoder.
+
+            During the reconstruction phase the training of the generator proceeds with the
+            discriminators weights frozen.
+
+            :param train_dist_dataset:
+                train dataset
+            :type train_dist_dataset:
+                tensorflow distribute dataset object
+            :param startegy:
+                distribute strategy
+            :type strategy:
+                tensorflow distributy startegy object
+            :param enable_function:
+                If True, wraps the train_step and test_step in tf.function
+            :type enable_function:
+                bool
+            :param graph:
+                if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
+            :type graph: 
+                bool
+            :param gene:
+                selected gene
+            :type gene: str
+            :param update_labels:
+               if true, updates the labels using Louvain clustering algorithm on latent space
+            :type update_labels: bool
+            :param log_dir:
+                directory with exported model files and tensorboard checkpoints
+            :type log_dir: str
+
+            :return:
+                lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
+        
+        """
+        
+        dis_loss = []
+        dis_cat_loss = []
+        rec_loss = []
+        
+        def distributed_train_epoch(ds):
+            
+            total_dis_loss = 0.0
+            total_dis_cat_loss = 0.0
+            total_auto_loss = 0.0
+            num_train_batches = 0.0
+            
+            for one_batch in ds:
+            
+                per_replica_dis_losses, per_replica_dis_cat_losses, per_replica_auto_losses = strategy.experimental_run_v2(self.train_step,args=(one_batch,))
+                
+                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_dis_losses, axis=0) 
+                total_dis_cat_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_dis_cat_losses, axis=0)
+                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_auto_losses, axis=0)
+                
+                num_train_batches += 1
+
+            return total_dis_loss, total_dis_cat_loss, total_auto_loss, num_train_batches
+        
+        
+        if enable_function:
+            distributed_train_epoch = tf.function(distributed_train_epoch)
+            
+        
+        print("Start model training...")
+        
+        for epoch in range(self.epochs):
+            
+            train_dis_loss, train_dis_cat_loss, train_auto_loss, num_train_batches = distributed_train_epoch(train_dist_dataset)
+            
+            train_dis_loss = train_dis_loss / num_train_batches
+            train_dis_cat_loss = train_dis_cat_loss / num_train_batches
+            train_auto_loss = train_auto_loss / num_train_batches
+            
+            dis_loss.append(train_dis_loss.numpy())
+            dis_cat_loss.append(train_dis_cat_loss.numpy())
+            rec_loss.append(train_auto_loss.numpy())
+            
+            message = ("Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}, cat. dis. loss: {4:.6f}")
+                
+            clear_output(wait=True)
+        
+            print(message.format(
+                                 *[epoch+1, self.epochs, 
+                                   train_auto_loss.numpy(), 
+                                   train_dis_loss.numpy(),
+                                   train_dis_cat_loss.numpy()]
+                                )
+                 )
+            
+            if graph and (gene is not None):
+                self.plot_umap(gene_selected=[gene], louvain=True)
+                
+        print("Training completed.")
+
+            
+        # save models in h5 format
+        makedirs(log_dir + 'models/', exist_ok=True)
+        self.export_model(log_dir + 'models/')
+
+        if update_labels:
+            self.update_labels()
+
+        return rec_loss, dis_loss, dis_cat_loss
+               
+        
     def train_on_batch(self, input_batch):
         """Training function for one step.
 
