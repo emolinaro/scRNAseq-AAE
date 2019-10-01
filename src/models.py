@@ -875,10 +875,11 @@ class VAE(Base):
 
             train_data, val_data = train_test_split(self.data, test_size=val_split, random_state=42)
 
-            train_dataset = tf.data.Dataset.from_tensor_slices(train_data).repeat(self.epochs).shuffle(
-                len(train_data)).batch(self.batch_size)
+            train_dataset = tf.data.Dataset.from_tensor_slices(train_data).shuffle(
+                len(train_data)).repeat(self.epochs).batch(self.batch_size).prefetch(buffer_size=1)
 
-            val_dataset = tf.data.Dataset.from_tensor_slices(val_data).repeat(self.epochs).batch(self.batch_size)
+            val_dataset = tf.data.Dataset.from_tensor_slices(val_data).repeat(
+                self.epochs).batch(self.batch_size).prefetch(buffer_size=1)
 
             vae_history = self.autoencoder.fit(
                 train_dataset,
@@ -905,24 +906,14 @@ class VAE(Base):
             val_size = int(len(self.data) * val_split)
 
             train_dataset = data_generator(data_file + '.train',
-                                           self.batch_size,
-                                           # train_size,
-                                           self.epochs,
+                                           batch_size=self.batch_size,
+                                           epochs=self.epochs,
                                            is_training=True)
-            # train_dataset = train_dataset.make_one_shot_iterator()
 
             val_dataset = data_generator(data_file + '.val',
-                                         self.batch_size,
-                                         # val_size,
-                                         self.epochs,
+                                         batch_size=self.batch_size,
+                                         epochs=self.epochs,
                                          is_training=False)
-            # val_dataset = val_dataset.make_one_shot_iterator()
-
-            # recompile the model specifying the target tensor
-            # optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
-            # self.autoencoder.compile(optimizer=optimizer_ae,
-            #                          metrics=['accuracy'],
-            #                          target_tensors=[train_dataset.get_next()])
 
             vae_history = self.autoencoder.fit(
                 train_dataset,
@@ -946,24 +937,6 @@ class VAE(Base):
         else:
             print("ERROR: mode not allowed. Possible choises: 'Internal', 'Dataset', 'TFRecord'.")
             sys.exit(0)
-
-        ## implement the following with fit_generator method
-        # import random
-        #
-        # def gen_data(data, batch_size):
-        # 	# Create empty arrays to contain batch of features and labels#
-        #
-        # 	batch_features = np.zeros((batch_size, data.shape[1]))
-        #
-        # 	while True:
-        # 		for i in range(batch_size):
-        # 			# choose random index in features
-        # 			index = random.choice(range(len(data)))
-        # 			batch_features[i] = data[index]
-        # 		yield batch_features
-        #
-        # train_gen = gen_data(train_data, self.batch_size)
-        # val_gen = gen_data(val_data, self.batch_size)
 
         print("Training completed.")
 
