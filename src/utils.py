@@ -124,31 +124,29 @@ def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
 		parsed_features['data'] = tf.decode_raw(parsed_features['data'], tf.float32)
 
 		return parsed_features['data']
+    
+	num_cpus = 24
 
 	# load TFRecords and create a Dataset object
-	file = tf.data.Dataset.list_files(filepath)
-	dataset = file.interleave(tf.data.TFRecordDataset)
+	files = tf.data.Dataset.list_files(filepath)
+	# dataset = files.interleave(tf.data.TFRecordDataset)
 
-	# dataset = files.apply(tf.contrib.data.parallel_interleave(
-	# 	tf.data.TFRecordDataset, cycle_length=FLAGS.num_parallel_readers))
+	dataset = tf.data.TFRecordDataset(files, num_parallel_reads=num_cpus)
+    
+    # set the number of datapoints you want to load and shuffle
+	if is_training:
+		dataset = dataset.shuffle(buffer_size=1000, reshuffle_each_iteration=True)
 
 	# repeat the dataset
 	dataset = dataset.repeat(epochs)
 
-	# set the number of datapoints you want to load and shuffle
-	if is_training:
-		dataset = dataset.shuffle(buffer_size=1000, reshuffle_each_iteration=True)
-
 	# parallelize data transformation
-	dataset = dataset.map(_parse_function, num_parallel_calls=6)
+	dataset = dataset.map(_parse_function, num_parallel_calls=num_cpus)
 
 	# set the batchsize
 	dataset = dataset.batch(batch_size, drop_remainder=True if is_training else False)
 
 	# prefetch elements from the input dataset ahead of the time they are requested
-	dataset = dataset.prefetch(batch_size)
+	dataset = dataset.prefetch(buffer_size=1)
 
-	# Create an iterator
-	# iterator = dataset.make_one_shot_iterator()
-
-	return dataset  # iterator
+	return dataset
