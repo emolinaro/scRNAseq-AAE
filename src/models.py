@@ -497,7 +497,7 @@ class Base():
 
         print("All networks exported in h5 format.")
 
-    def update_labels(self, res=1.0):
+    def update_labels(self, res=1.0, n_neighbors=10, n_pcs=40):
 
         """Cluster cells using the Louvain algorithm and update model labels
 
@@ -514,7 +514,7 @@ class Base():
 
         sc.tl.pca(Z, svd_solver='arpack')
 
-        sc.pp.neighbors(Z)
+        sc.pp.neighbors(Z, n_neighbors=n_neighbors, n_pcs=n_pcs)
 
         sc.tl.louvain(Z, resolution=res)
 
@@ -814,8 +814,7 @@ class VAE(Base):
         self.autoencoder.add_loss(ae_loss)
         self.autoencoder.compile(optimizer=optimizer_ae, metrics=['accuracy'])
 
-    def train(self, val_split=0.2, update_labels=False, log_dir="./results/", num_workers=1, mode='Internal',
-              data_file=None):
+    def train(self, val_split=0.2, log_dir="./results/", num_workers=1, mode='Internal', data_file=None):
 
         """Training of the Variational Autoencoder.
         The training will stop if there is no change in the validation loss after 30 epochs.
@@ -823,9 +822,6 @@ class VAE(Base):
         :param val_split:
             fraction of data used for validation
         :type val_split: float
-        :param update_labels:
-            if true, updates the labels using Louvain clustering algorithm on latent space
-        :type update_labels: bool
         :param log_dir:
             directory with exported model files and tensorboard checkpoints
         :type log_dir: str
@@ -946,9 +942,6 @@ class VAE(Base):
 
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
-
-        if update_labels:
-            self.update_labels()
 
         # # TODO: fix the problem with tensorboard callback. Follow discussion here:
         # # https://github.com/keras-team/keras/issues/12808
@@ -1234,7 +1227,7 @@ class AAE1(Base):
     
     
     def distributed_train(self, train_dist_dataset, strategy, 
-                          enable_function=True, graph=False, gene=None, update_labels=False, 
+                          enable_function=True, graph=False, gene=None,  
                           log_dir="./results"):
         
         """Training of the Adversarial Autoencoder.
@@ -1261,9 +1254,6 @@ class AAE1(Base):
             :param gene:
                 selected gene
             :type gene: str
-            :param update_labels:
-               if true, updates the labels using Louvain clustering algorithm on latent space
-            :type update_labels: bool
             :param log_dir:
                 directory with exported model files and tensorboard checkpoints
             :type log_dir: str
@@ -1329,9 +1319,6 @@ class AAE1(Base):
         # save models in h5 format
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
-
-        if update_labels:
-            self.update_labels()
 
         return rec_loss, dis_loss
        
@@ -1841,7 +1828,7 @@ class AAE2(Base):
     
     
     def distributed_train(self, train_dist_dataset, strategy, 
-                          enable_function=True, graph=False, gene=None, update_labels=False, 
+                          enable_function=True, graph=False, gene=None, 
                           log_dir="./results"):
         
         """Training of the Adversarial Autoencoder.
@@ -1868,9 +1855,6 @@ class AAE2(Base):
             :param gene:
                 selected gene
             :type gene: str
-            :param update_labels:
-               if true, updates the labels using Louvain clustering algorithm on latent space
-            :type update_labels: bool
             :param log_dir:
                 directory with exported model files and tensorboard checkpoints
             :type log_dir: str
@@ -1943,9 +1927,6 @@ class AAE2(Base):
         # save models in h5 format
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
-
-        if update_labels:
-            self.update_labels()
 
         return rec_loss, dis_loss, dis_cat_loss
                
