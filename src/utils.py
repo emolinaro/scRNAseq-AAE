@@ -1,5 +1,16 @@
 import tensorflow as tf
 
+class PColors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
 
 # The following class is a workaround to solve the following error when using Tensorboard:
 # AttributeError: 'TensorBoard' object has no attribute 'sess'
@@ -50,15 +61,15 @@ def export_to_tfrecord(filepath, adata, val_split=0.2):
 	"""Export dataset from h5ad format to TFRecord format.
 
 	   :param filepath:
-	          path of output file
+			  path of output file
 	   :type filepath: str
 
 	   :param adata:
-	          an annotated data matrix
+			  an annotated data matrix
 	   :type adata: AnnData object
 
 	   :param val_split:
-	          percentage of data assigned to validation dataset
+			  percentage of data assigned to validation dataset
 
 	   :return: TFRecord formatted files
 	"""
@@ -82,7 +93,6 @@ def export_to_tfrecord(filepath, adata, val_split=0.2):
 		single = tf.train.Example(features=tf.train.Features(feature=feature))
 
 		writer.write(single.SerializeToString())
-
 
 	# create train dataset
 	writer = tf.python_io.TFRecordWriter(filepath + ".val")
@@ -124,7 +134,7 @@ def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
 		parsed_features['data'] = tf.decode_raw(parsed_features['data'], tf.float32)
 
 		return parsed_features['data']
-    
+
 	num_cpus = 24
 
 	# load TFRecords and create a Dataset object
@@ -132,8 +142,8 @@ def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
 	# dataset = files.interleave(tf.data.TFRecordDataset)
 
 	dataset = tf.data.TFRecordDataset(files, num_parallel_reads=num_cpus)
-    
-    # set the number of datapoints you want to load and shuffle
+
+	# set the number of datapoints you want to load and shuffle
 	if is_training:
 		dataset = dataset.shuffle(buffer_size=1000, reshuffle_each_iteration=True)
 
