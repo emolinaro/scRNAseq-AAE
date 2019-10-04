@@ -189,8 +189,17 @@ optionalargs.add_argument(
     help="name of the output folder."
 )
 
+optionalargs.add_argument(
+    "-w",
+    "--worker",
+    type=str,
+    nargs="*",
+    dest="worker_list",
+    default=['localhost', 'localhost],
+    help="list of workers' hostnames."
+)
 
-def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrecord_data_file, output_folder):
+def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrecord_data_file, output_folder, worker_list):
     """
 
     :param data_file:
