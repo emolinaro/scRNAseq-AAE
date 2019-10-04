@@ -150,7 +150,7 @@ optionalargs.add_argument(
     type=str,
     dest="param_file",
     default=None,
-    help="JSON file with input parameters."
+    help="JSON file with input parameters to initialize the model."
 )
 
 optionalargs.add_argument(
@@ -189,18 +189,35 @@ optionalargs.add_argument(
     help="name of the output folder."
 )
 
+optionalargs.add_argument(
+    "-t",
+    "--task",
+    type=str,
+    dest="task",
+    default=None,
+    help="task number for multi-worker distribution strategy."
+)
 
-def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrecord_data_file, output_folder):
+
+def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrecord_data_file, task, output_folder):
     """
 
     :param data_file:
+        path to processed single cell RNA data file in h5da format
     :param model_type:
+        model type is one of 'VAE', 'AAE1', and 'AAE2'
     :param strategy_type:
+        TensorFlow distribution strategy type: 'MirroredStrategy' or 'MultiWorkerMirroredStrategy'
     :param param_file:
+        JSON file with input parameters to initialize the model
     :param add_param_file:
+        JSON file with additional model training parameters
     :param tfrecord_data_file:
+        path to TFRecord dataset file with extension .tfrecord
+    :param task:
+        task number for multi-worker distribution strategy
     :param output_folder:
-    :return:
+        name of the output folder
     """
 
     tf.enable_eager_execution()
@@ -254,7 +271,30 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
             model.get_summary()
 
     elif strategy_type == 'MultiWorkerMirroredStrategy':
-        pass
+
+        os.environ['TF_CONFIG'] = json.dumps({
+            "cluster": {
+                "worker": ["localhost:2222", "localhost:2223"]
+            },
+            "task": {"type": "worker", "index": task}
+        })
+
+        tf_config = os.getenv('TF_CONFIG')
+        print("cluster configuration: {}\n".format(tf_config))
+
+        strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
+
+        with strategy.scope():
+            if model_type == 'VAE':
+                BATCH_SIZE_PER_REPLICA = model.batch_size
+                global_batch_size = (BATCH_SIZE_PER_REPLICA * strategy.num_replicas_in_sync)
+                model.batch_size = global_batch_size
+                model.build_model()
+
+            else:
+                model.build_model()
+
+            model.get_summary()
 
     else:
         print('Invalid distribution strategy')
