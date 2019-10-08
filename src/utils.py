@@ -107,21 +107,30 @@ def export_to_tfrecord(filepath, adata, val_split=0.2):
         writer.write(single.SerializeToString())
 
 
-def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
+def data_generator(filepath, batch_size=35, epochs=200, num_cpus=24, is_training=True, auto_shard=False):
     """Build data pipeline.
 
     :param filepath:
+        input file path in TFRecord format
     :param batch_size:
+        batch size
     :param data_size:
+        number of data entries
     :param epochs:
+        number of epochs
+    :param num_cpus:
+        number of CPU cores to bbe used for pipeline parallelization
     :return:
+        batch generator data pipeline
     """
 
     def _parse_function(proto):
         """Parse TFExample records.
 
         :param proto:
+            single data entry
         :return:
+            transformed data entry
         """
         # data fetures
         keys_to_features = {'data': tf.io.FixedLenFeature((), tf.string, ""),
@@ -134,8 +143,6 @@ def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
         parsed_features['data'] = tf.decode_raw(parsed_features['data'], tf.float32)
 
         return parsed_features['data']
-
-    num_cpus = 24
 
     # load TFRecords and create a Dataset object
     files = tf.data.Dataset.list_files(filepath)
@@ -160,7 +167,7 @@ def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
     dataset = dataset.prefetch(buffer_size=1)
 
     options = tf.data.Options()
-    options.experimental_distribute.auto_shard = False
+    options.experimental_distribute.auto_shard = auto_shard
     dataset = dataset.with_options(options)
 
     return dataset
