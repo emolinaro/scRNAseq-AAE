@@ -1,0 +1,29 @@
+#!/bin/bash
+
+## model version: 1.0.0
+
+while getopts f:m:p:ap:tf:ds:o:w:t: option
+do
+	case "${option}"
+	in
+		f) DATA_FILE="-f "${OPTARG};;
+		m) MODEL_TYPE="-m "${OPTARG};;
+		p) PARAM_FILE="-p "${OPTARG};;
+		ap) ADD_PARAM_FILE="-ap "${OPTARG};;
+		tf) TFRECORD_DATA_FILE="-tf "${OPTARG};;
+		ds) STRATEGY_TYPE="-ds "${OPTARG};;
+		o) OUTPUT_FOLDER="-o "${OPTARG};;
+		w) WORKER_LIST="-w "${OPTARG};;
+		t) TASK="-t "${OPTARG};;
+	esac
+done
+
+## load additional dependencies
+
+## run training script
+python train.py $DATA_FILE $MODEL_TYPE $PARAM_FILE \
+                $ADD_PARAM_FILE $TFRECORD_DATA_FILE \
+                $STRATEGY_TYPE $OUTPUT_FOLDER \
+                $WORKER_LIST $TASK
+
+
