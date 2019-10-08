@@ -159,4 +159,8 @@ def data_generator(filepath, batch_size=35, epochs=200, is_training=True):
     # prefetch elements from the input dataset ahead of the time they are requested
     dataset = dataset.prefetch(buffer_size=1)
 
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard = False
+    dataset = dataset.with_options(options)
+
     return dataset
