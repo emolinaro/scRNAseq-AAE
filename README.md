@@ -3,7 +3,7 @@ Single cell RNA-sequencing analysis with Adversarial Autoencoders.
 
 ## Settings
 * Programmming language: Python 3.7
-* Deep learning framework: [TensorFlow](https://www.tensorflow.org/), ```tf.Keras``` API.
+* Deep learning framework: [TensorFlow](https://www.tensorflow.org/) 1.14.0, ```tf.Keras``` API.
 
 ## How to use it
 
