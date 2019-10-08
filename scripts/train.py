@@ -290,14 +290,15 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
 
         tf_config = os.getenv('TF_CONFIG')
         print("cluster configuration: {}\n".format(tf_config))
-        sys.exit()
 
         strategy = tf.distribute.experimental.MultiWorkerMirroredStrategy()
+	
+        num_workers = len(worker_list)	
 
         with strategy.scope():
             if model_type == 'VAE':
                 BATCH_SIZE_PER_REPLICA = model.batch_size
-                global_batch_size = (BATCH_SIZE_PER_REPLICA * strategy.num_replicas_in_sync)
+                global_batch_size = (BATCH_SIZE_PER_REPLICA * num_workers)
                 model.batch_size = global_batch_size
                 model.build_model()
 
