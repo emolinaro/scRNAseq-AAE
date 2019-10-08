@@ -1826,7 +1826,7 @@ class AAE2(Base):
                 train dataset
             :type train_dist_dataset:
                 tensorflow distribute dataset object
-            :param startegy:
+            :param strategy:
                 distribute strategy
             :type strategy:
                 tensorflow distributy startegy object
