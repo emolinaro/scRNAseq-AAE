@@ -117,9 +117,9 @@ def init_parameters(param_file, model_type):
 parser = argparse.ArgumentParser(
     prog='train.py',
     usage='python train.py --data-file=data_PATH [options]',
-    description="The %(prog)s script allows comstruct and train a deepneural network for clustering of single-cell \
-                 RNA sequencing data. The models implemented include yhe variational autoencoder and two different\
-                 implementations of adversarial autoencoder.",
+    description="The %(prog)s script builds and trains a deep neural network for clustering of single-cell \
+                 RNA sequencing data. The models implemented include: one implementation of variational autoencoder and two \
+                 types of adversarial autoencoder.",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 
