@@ -3,7 +3,7 @@ Single cell RNA-sequencing analysis with Adversarial Autoencoders.
 
 ## Settings
 * Programmming language: Python 3.7
-* Deep learning framework: [Keras](https://keras.io/)
+* Deep learning framework: [TensorFlow](https://www.tensorflow.org/), ```tf.Keras``` API.
 
 ## How to use it
 
@@ -11,6 +11,6 @@ Single cell RNA-sequencing analysis with Adversarial Autoencoders.
 
 * Install [Graphiviz](https://www.graphviz.org/) library for visualization of network graphs in the notebook (optional). 
 
-* The data [preprocressing notebook](https://github.com/emolinaro/scRNAseq-AAE/blob/master/src/preprocessing.ipynb) is used to filter and label the datasets. 
+* The data [preprocressing](https://github.com/emolinaro/scRNAseq-AAE/blob/master/notebooks/preprocessing.ipynb) notebook is used to apply filters and add labels to the datasets. 
 
-* Examples of the clustering analysis for specific datasets are reported in the [analysis notebook](https://github.com/emolinaro/scRNAseq-AAE/blob/master/src/analysis.ipynb).
+* Examples of the clustering analysis for specific datasets are reported in the [distributed_analysis](https://github.com/emolinaro/scRNAseq-AAE/blob/master/notebooks/distributed_analysis.ipynb) notebook.
