@@ -865,6 +865,7 @@ class VAE(Base):
                     tensorboard
                 ],
                 verbose=1)
+
         elif mode == 'Dataset':
 
             # training using datasets from numpy arrays
@@ -1825,11 +1826,11 @@ class AAE2(Base):
             :param train_dist_dataset:
                 train dataset
             :type train_dist_dataset:
-                tensorflow distribute dataset object
+                tensorflow distributed dataset object
             :param strategy:
                 distribute strategy
             :type strategy:
-                tensorflow distributy startegy object
+                tensorflow distribution strategy object
             :param enable_function:
                 If True, wraps the train_step and test_step in tf.function
             :type enable_function:
