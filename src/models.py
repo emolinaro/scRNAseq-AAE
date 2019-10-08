@@ -1,15 +1,21 @@
-from keras.layers import Lambda, Input, Dense, BatchNormalization, Dropout, LeakyReLU, Softmax, concatenate
-from keras.models import Model
-from keras.optimizers import Adam
-from keras.utils import to_categorical, plot_model
-from keras import regularizers
-from keras import backend as K
-from keras.activations import softmax
-from keras.losses import mse
-from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
-
 from IPython.display import clear_output
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
+from utils import data_generator
+
+import tensorflow as tf
+from tensorflow.keras import layers as L
+from tensorflow.keras import Model
+from tensorflow.keras.losses import mse
+from tensorflow.keras import backend as K
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+
+# TensorBoard = TensorBoardWithSession
+
+from tensorflow.keras.utils import to_categorical, plot_model
+from tensorflow.keras.models import load_model, save_model
 
 import numpy as np
 import pandas as pd
@@ -19,7 +25,7 @@ from scanpy import read_h5ad
 import matplotlib.pyplot as plt
 from os.path import join
 from os import makedirs
-from keras.models import load_model
+import sys
 
 
 def sampling(args):
@@ -40,6 +46,7 @@ def sampling(args):
     # by default, random_normal has mean = 0 and std = 1.0
     epsilon = K.random_normal(shape=(batch, dim))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
+
 
 def sampling_gumbel(logits_y, tau):
     """Gumbel trick to sample from a discrete distribution.
@@ -312,7 +319,6 @@ class Base():
             self.labels = adata.obs['louvain'].values.astype(int).tolist()
         except:
             print("Louvain clustering not defined in this dataset.")
-            # self.labels = None
             self.labels = np.zeros((self.original_dim,), dtype=int)
 
         print("Dataset imported.")
@@ -367,10 +373,29 @@ class Base():
         if filepath[-1] != "/":
             filepath = filepath + "/"
 
-        plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
-        plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
-        plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
-        plot_model(self.discriminator, to_file=filepath + "discriminator.png", show_shapes=True)
+        plot_model(self.encoder,
+                   to_file=filepath + "encoder.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.decoder,
+                   to_file=filepath + "decoder.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.autoencoder,
+                   to_file=filepath + "autoencoder.png",
+                   show_shapes=True,
+                   expand_nested=True,
+                   show_layer_names=True)
+
+        plot_model(self.discriminator,
+                   to_file=filepath + "discriminator.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
 
         print("Model graphs saved.\n")
 
@@ -472,7 +497,7 @@ class Base():
 
         print("All networks exported in h5 format.")
 
-    def update_labels(self, res=1.0):
+    def update_labels(self, res=1.0, n_neighbors=10, n_pcs=40):
 
         """Cluster cells using the Louvain algorithm and update model labels
 
@@ -489,7 +514,7 @@ class Base():
 
         sc.tl.pca(Z, svd_solver='arpack')
 
-        sc.pp.neighbors(Z)
+        sc.pp.neighbors(Z, n_neighbors=n_neighbors, n_pcs=n_pcs)
 
         sc.tl.louvain(Z, resolution=res)
 
@@ -627,9 +652,23 @@ class VAE(Base):
         if filepath[-1] != "/":
             filepath = filepath + "/"
 
-        plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
-        plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
-        plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
+        plot_model(self.encoder,
+                   to_file=filepath + "encoder.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.decoder,
+                   to_file=filepath + "decoder.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.autoencoder,
+                   to_file=filepath + "autoencoder.png",
+                   show_shapes=True,
+                   expand_nested=True,
+                   show_layer_names=True)
 
         print("Model graphs saved.\n")
 
@@ -647,7 +686,9 @@ class VAE(Base):
             filepath = filepath + "/"
 
         self.autoencoder.save(filepath + 'autoencoder.h5')
+
         self.encoder.save(filepath + 'encoder.h5')
+
         self.decoder.save(filepath + 'decoder.h5')
 
         print("All networks exported in h5 format.")
@@ -660,38 +701,37 @@ class VAE(Base):
             encoder
         """
         # NB: no kernel regularizer and activity regularizer
-        # TODO: implement: 1) DETERMINISTIC POSTERIOR Q(z|x); 2) UNIVERSAL APPROXIMATOR POSTERIOR
 
         # GAUSSIAN POSTERIOR
 
-        encoder_input = Input(shape=(self.original_dim,), name="X")
+        encoder_input = L.Input(shape=(self.original_dim,), name="X")
 
         x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        z_mean = Dense(self.latent_dim,
-                       name='z_mean',
-                       kernel_initializer=self.kernel_initializer,
-                       bias_initializer=self.bias_initializer)(x)
+        z_mean = L.Dense(self.latent_dim,
+                         name='z_mean',
+                         kernel_initializer=self.kernel_initializer,
+                         bias_initializer=self.bias_initializer)(x)
 
-        z_log_var = Dense(self.latent_dim,
-                          name='z_log_var',
-                          kernel_initializer=self.kernel_initializer,
-                          bias_initializer=self.bias_initializer)(x)
+        z_log_var = L.Dense(self.latent_dim,
+                            name='z_log_var',
+                            kernel_initializer=self.kernel_initializer,
+                            bias_initializer=self.bias_initializer)(x)
 
-        z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
+        z = L.Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
         # instantiate encoder model
         encoder = Model(encoder_input, [z_mean, z_log_var, z], name='encoder')
@@ -708,26 +748,26 @@ class VAE(Base):
 
         # TODO: check impact of kernel and activity regularizer
 
-        decoder_input = Input(shape=(self.latent_dim,), name='Z')
+        decoder_input = L.Input(shape=(self.latent_dim,), name='Z')
 
         x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
+        x = L.Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
 
         # instantiate decoder model
         decoder = Model(decoder_input, x, name='decoder')
@@ -742,9 +782,9 @@ class VAE(Base):
 
         optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
 
-        # TODO: implement optimizer_ae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
+        # TODO: implement optimizer_ae = SGD(learning_rate=0.001, decay=1e-6, momentum=0.9)
 
-        encoder_input = Input(shape=(self.original_dim,), name='X')
+        encoder_input = L.Input(shape=(self.original_dim,), name='X')
 
         # build encoder
         self.encoder = self._build_encoder()
@@ -774,7 +814,7 @@ class VAE(Base):
         self.autoencoder.add_loss(ae_loss)
         self.autoencoder.compile(optimizer=optimizer_ae, metrics=['accuracy'])
 
-    def train(self, val_split=0.2, update_labels=False, log_dir="./results/"):
+    def train(self, val_split=0.2, log_dir="./results/", num_workers=1, mode='Internal', data_file=None):
 
         """Training of the Variational Autoencoder.
         The training will stop if there is no change in the validation loss after 30 epochs.
@@ -782,12 +822,18 @@ class VAE(Base):
         :param val_split:
             fraction of data used for validation
         :type val_split: float
-        :param update_labels:
-            if true, updates the labels using Louvain clustering algorithm on latent space
-        :type update_labels: bool
         :param log_dir:
             directory with exported model files and tensorboard checkpoints
         :type log_dir: str
+        :param num_workers"
+            number of workers for multrithreading
+        :type num_workers: int
+        :param mode:
+            specify data cosumption during training
+        :type mode: str
+        :param data_file:
+            file with data saved in TFRecord format
+        :type data_file: str
 
         :return:
             lists containing training loss and validation loss
@@ -801,58 +847,130 @@ class VAE(Base):
         makedirs(log_dir + 'logs/summaries/', exist_ok=True)
         tensorboard = TensorBoard(log_dir=log_dir + 'logs/summaries/')
 
-        vae_history = self.autoencoder.fit(self.data,
-                                           epochs=self.epochs,
+        if mode == 'Internal':
+            vae_history = self.autoencoder.fit(
+                self.data,
+                batch_size=self.batch_size,
+                validation_split=val_split,
+                epochs=self.epochs,
+                use_multiprocessing=True,
+                workers=num_workers,
+                callbacks=[  # checkpoint('../models/vae_weights.hdf5'),
+                    EarlyStopping(monitor='val_loss',
+                                  patience=30,
+                                  verbose=0,
+                                  mode='min',
+                                  baseline=None,
+                                  restore_best_weights=False),
+                    tensorboard
+                ],
+                verbose=1)
+
+        elif mode == 'Dataset':
+
+            # training using datasets from numpy arrays
+
+            train_data, val_data = train_test_split(self.data, test_size=val_split, random_state=42)
+
+            train_dataset = tf.data.Dataset.from_tensor_slices(train_data).shuffle(
+                len(train_data)).repeat(self.epochs).batch(self.batch_size).prefetch(buffer_size=1)
+
+            val_dataset = tf.data.Dataset.from_tensor_slices(val_data).repeat(
+                self.epochs).batch(self.batch_size).prefetch(buffer_size=1)
+
+            vae_history = self.autoencoder.fit(
+                train_dataset,
+                epochs=self.epochs,
+                validation_data=val_dataset,
+                use_multiprocessing=True,
+                workers=num_workers,
+                steps_per_epoch=len(train_data) // self.batch_size,
+                validation_steps=len(val_data) // self.batch_size,
+                callbacks=[  # checkpoint('../models/vae_weights.hdf5'),
+                    EarlyStopping(monitor='val_loss',
+                                  patience=30,
+                                  verbose=0,
+                                  mode='min',
+                                  baseline=None,
+                                  restore_best_weights=False),
+                    tensorboard
+                ],
+                verbose=1)
+
+        elif (mode == "TFRecord") and (data_file is not None):
+
+            train_size = int(len(self.data) * (1 - val_split))
+            val_size = int(len(self.data) * val_split)
+
+            train_dataset = data_generator(data_file + '.train',
                                            batch_size=self.batch_size,
-                                           validation_split=val_split,
-                                           callbacks=[  # checkpoint('../models/vae_weights.hdf5'),
-                                               EarlyStopping(monitor='val_loss',
-                                                             patience=30,
-                                                             verbose=0,
-                                                             mode='min',
-                                                             baseline=None,
-                                                             restore_best_weights=False),
-                                               tensorboard
-                                           ],
-                                           verbose=1)
+                                           epochs=self.epochs,
+                                           is_training=True)
+
+            val_dataset = data_generator(data_file + '.val',
+                                         batch_size=self.batch_size,
+                                         epochs=self.epochs,
+                                         is_training=False)
+
+            vae_history = self.autoencoder.fit(
+                train_dataset,
+                epochs=self.epochs,
+                validation_data=val_dataset,
+                use_multiprocessing=True,
+                steps_per_epoch=train_size // self.batch_size,
+                validation_steps=val_size // self.batch_size,
+                workers=num_workers,
+                callbacks=[  # checkpoint('../models/vae_weights.hdf5'),
+                    EarlyStopping(monitor='val_loss',
+                                  patience=30,
+                                  verbose=0,
+                                  mode='min',
+                                  baseline=None,
+                                  restore_best_weights=False),
+                    tensorboard
+                ],
+                verbose=1)
+
+        else:
+            print("ERROR: mode not allowed. Possible choises: 'Internal', 'Dataset', 'TFRecord'.")
+            sys.exit(0)
 
         print("Training completed.")
 
         # save models in h5 format
-        # this is a workaround to avoid AttributrError due to multiple putputs of encoder net
+        # this is a workaround to avoid AttributrError due to multiple outputs of encoder net
         # the same trick is applied in the other models
 
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
 
-        if update_labels:
-            self.update_labels()
-
-        makedirs(log_dir + '/logs/projector/', exist_ok=True)
-        with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
-            np.savetxt(f, self.labels, fmt='%i')
-
-        self.encoder = load_model(log_dir + 'models/encoder.h5')
-
-        tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
-                                  batch_size=self.batch_size,
-                                  embeddings_freq=1,
-                                  write_graph=False,
-                                  embeddings_layer_names=['z_mean', 'Z'],
-                                  embeddings_metadata='metadata.tsv',
-                                  embeddings_data=self.data
-                                  )
-
-        data_compression = self.encoder.predict(self.data, batch_size=self.batch_size)[2]
-        self.encoder.compile(optimizer='adam', loss=[None, None, 'mse'])
-        self.encoder.fit(self.data,
-                         data_compression,
-                         batch_size=self.batch_size,
-                         callbacks=[tensorboard],
-                         epochs=1,
-                         verbose=0)
-        print("Latent space embedding completed.")
-
+        # # TODO: fix the problem with tensorboard callback. Follow discussion here:
+        # # https://github.com/keras-team/keras/issues/12808
+        #
+        # makedirs(log_dir + '/logs/projector/', exist_ok=True)
+        # with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
+        # 	np.savetxt(f, self.labels, fmt='%i')
+        #
+        # # self.encoder = load_model(log_dir + 'models/encoder.h5')
+        #
+        # tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
+        #                           batch_size=self.batch_size,
+        #                           embeddings_freq=1,
+        #                           write_graph=False,
+        #                           embeddings_layer_names=['z_mean', 'Z'],
+        #                           embeddings_metadata='metadata.tsv',
+        #                           embeddings_data=[self.data]
+        #                           )
+        #
+        # data_compression = self.encoder.predict(self.data, batch_size=self.batch_size)[2]
+        # self.encoder.compile(optimizer='adam', loss=[None, None, 'mse'])
+        # self.encoder.fit(self.data,
+        #                  data_compression,
+        #                  batch_size=self.batch_size,
+        #                  callbacks=[tensorboard],
+        #                  epochs=1,
+        #                  verbose=0)
+        # print("Latent space embedding completed.")
 
         loss = vae_history.history["loss"]
         val_loss = vae_history.history["val_loss"]
@@ -906,40 +1024,38 @@ class AAE1(Base):
         :return:
             encoder
         """
-        # NB: no kernel regularizer and activity regularizer
-        # TODO: implement: 1) DETERMINISTIC POSTERIOR Q(z|x); 2) UNIVERSAL APPROXIMATOR POSTERIOR
 
         # GAUSSIAN POSTERIOR
 
-        encoder_input = Input(shape=(self.original_dim,), name="X")
+        encoder_input = L.Input(shape=(self.original_dim,), name="X")
 
         x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      bias_initializer=self.bias_initializer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        bias_initializer=self.bias_initializer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        z_mean = Dense(self.latent_dim,
-                       name='z_mean',
-                       kernel_initializer=self.kernel_initializer,
-                       bias_initializer=self.bias_initializer)(x)
+        z_mean = L.Dense(self.latent_dim,
+                         name='z_mean',
+                         kernel_initializer=self.kernel_initializer,
+                         bias_initializer=self.bias_initializer)(x)
 
-        z_log_var = Dense(self.latent_dim,
-                          name='z_log_var',
-                          kernel_initializer=self.kernel_initializer,
-                          bias_initializer=self.bias_initializer)(x)
+        z_log_var = L.Dense(self.latent_dim,
+                            name='z_log_var',
+                            kernel_initializer=self.kernel_initializer,
+                            bias_initializer=self.bias_initializer)(x)
 
-        z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
+        z = L.Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
         # instantiate encoder model
         encoder = Model(encoder_input, [z_mean, z_log_var, z], name='encoder')
@@ -956,26 +1072,26 @@ class AAE1(Base):
 
         # TODO: check impact of kernel and activity regularizer
 
-        decoder_input = Input(shape=(self.latent_dim,), name='Z')
+        decoder_input = L.Input(shape=(self.latent_dim,), name='Z')
 
         x = decoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
+        x = L.Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
 
         # instantiate decoder model
         decoder = Model(decoder_input, x, name='decoder')
@@ -989,29 +1105,29 @@ class AAE1(Base):
         :return:
             discriminator
         """
-        optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
+        optimizer_dis = Adam(learning_rate=self.lr_dis, decay=self.dr_dis)
 
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
+        latent_input = L.Input(shape=(self.latent_dim,), name='Z')
         discr_input = latent_input
 
         x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        x = Dense(1, activation='sigmoid', name="Check")(x)
+        x = L.Dense(1, activation='sigmoid', name="Check")(x)
 
         # instantiate and compile discriminator model
         discriminator = Model(latent_input, x, name='discriminator')
@@ -1046,11 +1162,11 @@ class AAE1(Base):
 
         """
 
-        optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
+        optimizer_ae = Adam(learning_rate=self.lr_ae, decay=self.dr_ae)
 
-        # optimizer_aae = SGD(lr=0.001, decay=1e-6, momentum=0.9)
+        # optimizer_aae = SGD(learning_rate=0.001, decay=1e-6, momentum=0.9)
 
-        encoder_input = Input(shape=(self.original_dim,), name='X')
+        encoder_input = L.Input(shape=(self.original_dim,), name='X')
 
         # build encoder
         self.encoder = self._build_encoder()
@@ -1075,108 +1191,127 @@ class AAE1(Base):
                                  loss_weights=[0.99, 0.01]
                                  )
 
-    def train(self, graph=False, gene=None, update_labels=False, log_dir="./results"):
+    def train_step(self, input_batch):
 
-        """Training of the Adversarial Autoencoder.
+        """Training function for one step.
 
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
-
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :param update_labels:
-            if true, updates the labels using Louvain clustering algorithm on latent space
-        :type update_labels: bool
-        :param log_dir:
-            directory with exported model files and tensorboard checkpoints
-        :type log_dir: str
-
-        :return:
-            lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
+                    :param input_batch:
+                        batch of input data
+                    :return:
+                        discriminator and autoencoder loss functions
         """
 
-        rec_loss = []
-        dis_loss = []
+        batch = input_batch
 
-        if log_dir[-1] != "/":
-            log_dir = log_dir + "/"
-
-        steps = int(len(self.data) / self.batch_size)
-        batches = self.epochs * steps
-
-        for step in range(batches):
-
-            ids = np.random.randint(0, self.data.shape[0], self.batch_size)
-            batch = self.data[ids]
-
+        with tf.GradientTape() as tape:
             # Regularization phase
-            fake_pred = self.encoder.predict(batch)[2]
-            real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-            discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-            discriminator_batch_y = np.concatenate([np.random.uniform(0.9, 1.0, self.batch_size),
-                                                    np.random.uniform(0.0, 0.1, self.batch_size)])
+            encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('Z').output)
 
-            discriminator_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
-                                                                      y=discriminator_batch_y)
-            dis_loss.append(discriminator_history[0])
+            fake_pred = encoder_model(batch)
+            real_pred = tf.random.normal((self.batch_size, self.latent_dim))
+            discriminator_batch_x = tf.concat([fake_pred, real_pred], axis=0)
+            discriminator_batch_y = tf.concat([tf.random.uniform([self.batch_size], minval=0.9, maxval=1.0),
+                                               tf.random.uniform([self.batch_size], minval=0.0, maxval=0.1)], axis=0)
+
+            discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+                                                                            y=discriminator_batch_y)
 
             # Reconstruction phase
             real = np.zeros((self.batch_size,), dtype=int)
-            autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
-                                                                        y=[batch, real])
+            autoencoder_train_history = self.autoencoder.train_on_batch(x=batch, y=[batch, real])
 
-            rec_loss.append(autoencoder_train_history[0])
+        return discriminator_train_history, autoencoder_train_history
 
-            if ((step+1) % steps == 0):
+    def distributed_train(self, train_dist_dataset, strategy,
+                          enable_function=True, graph=False, gene=None,
+                          log_dir="./results"):
 
-                clear_output(wait=True)
+        """Training of the Adversarial Autoencoder.
 
-                print(
-                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}"
-                        .format(
-                        *[int((step + 1)/steps), self.epochs, rec_loss[0], dis_loss[0]])
-                )
+            During the reconstruction phase the training of the generator proceeds with the
+            discriminator weights frozen.
 
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
+            :param train_dist_dataset:
+                train dataset
+            :type train_dist_dataset:
+                tensorflow distribute dataset object
+            :param startegy:
+                distribute strategy
+            :type strategy:
+                tensorflow distributy startegy object
+            :param enable_function:
+                If True, wraps the train_step and test_step in tf.function
+            :type enable_function:
+                bool
+            :param graph:
+                if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
+            :type graph:
+                bool
+            :param gene:
+                selected gene
+            :type gene: str
+            :param log_dir:
+                directory with exported model files and tensorboard checkpoints
+            :type log_dir: str
+
+            :return:
+                lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
+
+        """
+
+        dis_loss = []
+        rec_loss = []
+
+        def distributed_train_epoch(ds):
+
+            total_dis_loss = 0.0
+            total_auto_loss = 0.0
+            num_train_batches = 0.0
+
+            for one_batch in ds:
+                per_replica_dis_losses, per_replica_auto_losses = strategy.experimental_run_v2(self.train_step,
+                                                                                               args=(one_batch,))
+
+                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_dis_losses[0]], axis=0)
+                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_auto_losses[0]], axis=0)
+
+                num_train_batches += 1
+
+            return total_dis_loss, total_auto_loss, num_train_batches
+
+        if enable_function:
+            distributed_train_epoch = tf.function(distributed_train_epoch)
+
+        print("Start model training...")
+
+        for epoch in range(self.epochs):
+
+            train_dis_loss, train_auto_loss, num_train_batches = distributed_train_epoch(train_dist_dataset)
+
+            train_dis_loss = train_dis_loss / num_train_batches
+            train_auto_loss = train_auto_loss / num_train_batches
+
+            dis_loss.append(train_dis_loss.numpy())
+            rec_loss.append(train_auto_loss.numpy())
+
+            message = ("Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}")
+
+            clear_output(wait=True)
+
+            print(message.format(
+                *[epoch + 1, self.epochs, train_auto_loss.numpy(), train_dis_loss.numpy()]
+            )
+            )
+
+            if graph and (gene is not None):
+                self.plot_umap(gene_selected=[gene], louvain=True)
 
         print("Training completed.")
 
         # save models in h5 format
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
-
-        if update_labels:
-            self.update_labels()
-
-        makedirs(log_dir + '/logs/projector/', exist_ok=True)
-        with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
-            np.savetxt(f, self.labels, fmt='%i')
-
-        self.encoder = load_model(log_dir + 'models/encoder.h5')
-
-        tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
-                                  batch_size=self.batch_size,
-                                  embeddings_freq=1,
-                                  write_graph=False,
-                                  embeddings_layer_names=['z_mean', 'Z'],
-                                  embeddings_metadata='metadata.tsv',
-                                  embeddings_data=self.data
-                                  )
-
-        data_compression = self.encoder.predict(self.data, batch_size=self.batch_size)[2]
-        self.encoder.compile(optimizer='adam', loss=[None, None, 'mse'])
-        self.encoder.fit(self.data,
-                         data_compression,
-                         batch_size=self.batch_size,
-                         callbacks=[tensorboard],
-                         epochs=1,
-                         verbose=0)
-        print("Latent space embedding completed.")
 
         return rec_loss, dis_loss
 
@@ -1331,11 +1466,35 @@ class AAE2(Base):
         if filepath[-1] != "/":
             filepath = filepath + "/"
 
-        plot_model(self.encoder, to_file=filepath + "encoder.png", show_shapes=True)
-        plot_model(self.decoder, to_file=filepath + "decoder.png", show_shapes=True)
-        plot_model(self.autoencoder, to_file=filepath + "autoencoder.png", show_shapes=True)
-        plot_model(self.discriminator, to_file=filepath + "discriminator.png", show_shapes=True)
-        plot_model(self.discriminator_cat, to_file=filepath + "discriminator_cat.png", show_shapes=True)
+        plot_model(self.encoder,
+                   to_file=filepath + "encoder.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.decoder,
+                   to_file=filepath + "decoder.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.autoencoder,
+                   to_file=filepath + "autoencoder.png",
+                   show_shapes=True,
+                   expand_nested=True,
+                   show_layer_names=True)
+
+        plot_model(self.discriminator,
+                   to_file=filepath + "discriminator.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
+
+        plot_model(self.discriminator_cat,
+                   to_file=filepath + "discriminator_cat.png",
+                   show_shapes=True,
+                   expand_nested=False,
+                   show_layer_names=True)
 
         print("Model graphs saved.\n")
 
@@ -1371,66 +1530,65 @@ class AAE2(Base):
 
         # GAUSSIAN POSTERIOR
 
-        encoder_input = Input(shape=(self.original_dim,), name="X")
+        encoder_input = L.Input(shape=(self.original_dim,), name="X")
 
-        #x = Dropout(rate=self.do_rate, name='D_O')(encoder_input)
         x = encoder_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_enc_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        z0 = Dense(self.layers_enc_dim[-1],
-                   name="H_z",
-                   kernel_initializer=self.kernel_initializer
-                   )(x)
+        z0 = L.Dense(self.layers_enc_dim[-1],
+                     name="H_z",
+                     kernel_initializer=self.kernel_initializer
+                     )(x)
 
-        z0 = BatchNormalization(name='BN_z')(z0)
+        z0 = L.BatchNormalization(name='BN_z')(z0)
 
-        z0 = LeakyReLU(alpha=self.alpha, name='LR_z')(z0)
+        z0 = L.LeakyReLU(alpha=self.alpha, name='LR_z')(z0)
 
-        z0 = Dropout(rate=self.do_rate, name='D_z')(z0)
+        z0 = L.Dropout(rate=self.do_rate, name='D_z')(z0)
 
-        z_mean = Dense(self.latent_dim,
-                       name='z_mean',
-                       kernel_initializer=self.kernel_initializer,
-                       bias_initializer=self.bias_initializer
-                       )(z0)
+        z_mean = L.Dense(self.latent_dim,
+                         name='z_mean',
+                         kernel_initializer=self.kernel_initializer,
+                         bias_initializer=self.bias_initializer
+                         )(z0)
 
-        z_log_var = Dense(self.latent_dim,
-                          name='z_log_var',
-                          kernel_initializer=self.kernel_initializer,
-                          bias_initializer=self.bias_initializer
-                          )(z0)
+        z_log_var = L.Dense(self.latent_dim,
+                            name='z_log_var',
+                            kernel_initializer=self.kernel_initializer,
+                            bias_initializer=self.bias_initializer
+                            )(z0)
 
-        z = Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
+        z = L.Lambda(sampling, output_shape=(self.latent_dim,), name='Z')([z_mean, z_log_var])
 
-        y0 = Dense(self.layers_enc_dim[-1],
-                   name="H_y",
-                   kernel_initializer=self.kernel_initializer)(x)
+        y0 = L.Dense(self.layers_enc_dim[-1],
+                     name="H_y",
+                     kernel_initializer=self.kernel_initializer)(x)
 
-        y0 = BatchNormalization(name='BN_y')(y0)
+        y0 = L.BatchNormalization(name='BN_y')(y0)
 
-        y0 = LeakyReLU(alpha=self.alpha, name='LR_y')(y0)
+        y0 = L.LeakyReLU(alpha=self.alpha, name='LR_y')(y0)
 
-        y0 = Dropout(rate=self.do_rate, name='D_y')(y0)
+        y0 = L.Dropout(rate=self.do_rate, name='D_y')(y0)
 
-        y = Dense(self.num_clusters,
-                  name='logits',
-                  kernel_initializer=self.kernel_initializer,
-                  bias_initializer=self.bias_initializer
-                  )(y0)
+        y = L.Dense(self.num_clusters,
+                    name='logits',
+                    kernel_initializer=self.kernel_initializer,
+                    bias_initializer=self.bias_initializer
+                    )(y0)
 
-        y = Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(self.num_clusters,), name='y')(y)
+        y = L.Lambda(sampling_gumbel, arguments={'tau': self.tau}, output_shape=(self.num_clusters,), name='y')(y)
 
         # instantiate encoder model
         encoder = Model(encoder_input, [z_mean, z_log_var, z, y], name='encoder')
@@ -1445,29 +1603,28 @@ class AAE2(Base):
             decoder
         """
 
-        latent_input = Input(shape=(self.latent_dim,), name='Z')
-        classes = Input(shape=(self.num_clusters,), name='y')
+        latent_input = L.Input(shape=(self.latent_dim,), name='Z')
+        classes = L.Input(shape=(self.num_clusters,), name='y')
 
-        decoder_input = concatenate([latent_input, classes], name='Z_y')
+        decoder_input = L.concatenate([latent_input, classes], name='Z_y')
         x = decoder_input
-        # x = Dropout(rate=self.do_rate, name='D_O')(decoder_input)
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dec_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        x = Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
+        x = L.Dense(self.original_dim, activation='sigmoid', name="Xp")(x)
 
         # instantiate decoder model
         decoder = Model([latent_input, classes], x, name='decoder')
@@ -1482,29 +1639,28 @@ class AAE2(Base):
             discriminator
         """
 
-        optimizer_dis = Adam(lr=self.lr_dis, decay=self.dr_dis)
+        optimizer_dis = Adam(learning_rate=self.lr_dis, decay=self.dr_dis)
 
-        discr_input = Input(shape=(self.latent_dim,), name='Z')
+        discr_input = L.Input(shape=(self.latent_dim,), name='Z')
 
-        # x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
         x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        x = Dense(1, activation='sigmoid', name="Check")(x)
+        x = L.Dense(1, activation='sigmoid', name="Check")(x)
 
         # instantiate and compile discriminator model
         discriminator = Model(discr_input, x, name='discriminator')
@@ -1541,29 +1697,29 @@ class AAE2(Base):
             discriminator_cat
 
         """
-        optimizer_dis = Adam(lr=self.lr_dis_cat, decay=self.dr_dis_cat)
+        optimizer_dis = Adam(learning_rate=self.lr_dis_cat, decay=self.dr_dis_cat)
 
-        discr_input = Input(shape=(self.num_clusters,), name='y')
+        discr_input = L.Input(shape=(self.num_clusters,), name='y')
 
         # x = Dropout(rate=self.do_rate, name='D_O')(discr_input)
         x = discr_input
 
         # add dense layers
         for i, nodes in enumerate(self.layers_dis_cat_dim):
-            x = Dense(nodes,
-                      name="H_" + str(i + 1),
-                      kernel_initializer=self.kernel_initializer,
-                      kernel_regularizer=self.kernel_regularizer,
-                      activity_regularizer=self.activity_regularizer
-                      )(x)
+            x = L.Dense(nodes,
+                        name="H_" + str(i + 1),
+                        kernel_initializer=self.kernel_initializer,
+                        kernel_regularizer=self.kernel_regularizer,
+                        activity_regularizer=self.activity_regularizer
+                        )(x)
 
-            x = BatchNormalization(name='BN_' + str(i + 1))(x)
+            x = L.BatchNormalization(name='BN_' + str(i + 1))(x)
 
-            x = LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
+            x = L.LeakyReLU(alpha=self.alpha, name='LR_' + str(i + 1))(x)
 
-            x = Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
+            x = L.Dropout(rate=self.do_rate, name='D_' + str(i + 1))(x)
 
-        x = Dense(1, activation='sigmoid', name="Check")(x)
+        x = L.Dense(1, activation='sigmoid', name="Check")(x)
 
         # instantiate and compile discriminator model
         discriminator = Model(discr_input, x, name='discriminator_cat')
@@ -1577,9 +1733,9 @@ class AAE2(Base):
 
         """
 
-        optimizer_ae = Adam(lr=self.lr_ae, decay=self.dr_ae)
+        optimizer_ae = Adam(learning_rate=self.lr_ae, decay=self.dr_ae)
 
-        encoder_input = Input(shape=(self.original_dim,), name='X')
+        encoder_input = L.Input(shape=(self.original_dim,), name='X')
 
         # build encoder
         self.encoder = self._build_encoder()
@@ -1610,96 +1766,147 @@ class AAE2(Base):
                                  loss_weights=[0.99, 0.005, 0.005]
                                  )
 
-    def train(self, graph=False, gene=None, update_labels=False, log_dir="./results/"):
+    def train_step(self, input_batch):
 
-        """Training of the semisupervised adversarial autoencoder.
+        """Training function for one step.
 
-        During the reconstruction phase the training of the generator proceeds with the
-        discriminator weights frozen.
-
-        :param graph:
-            if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
-        :type graph: bool
-        :param gene:
-            selected gene
-        :type gene: str
-        :param update_labels:
-            if true, updates the labels using Louvain clustering algorithm on latent space
-        :type update_labels: bool
-        :param log_dir:
-            directory with exported model files and tensorboard checkpoints
-        :type log_dir: str
-
-        :return:
-            lists containing reconstruction training loss, reconstruction validation loss,
-            discriminator loss, and categorical discriminator loss at each epoch
+                    :param input_batch:
+                        batch of input data
+                    :return:
+                        discriminator, categorical discriminator, and autoencoder loss functions
         """
 
-        rec_loss = []
-        # val_loss = []
-        dis_loss = []
-        dis_cat_loss = []
+        batch = input_batch
 
-        if log_dir[-1] != "/":
-            log_dir = log_dir + "/"
-
-        print("Start model training...")
-
-        steps = int(len(self.data) / self.batch_size)
-        batches = self.epochs * steps
-
-        for step in range(batches):
-
-            ids = np.random.randint(0, self.data.shape[0], self.batch_size)
-            batch = self.data[ids]
+        with tf.GradientTape() as tape:
+            real = tf.random.uniform([self.batch_size], minval=0.0, maxval=0.1)
+            fake = tf.random.uniform([self.batch_size], minval=0.9, maxval=1.0)
 
             # Regularization phase
-            real = np.random.uniform(0.0, 0.1, self.batch_size)
-            fake = np.random.uniform(0.9, 1.0, self.batch_size)
+            encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('Z').output)
 
-            fake_pred = self.encoder.predict(batch)[2]
-            real_pred = np.random.normal(size=(self.batch_size, self.latent_dim))  # prior distribution
-            discriminator_batch_x = np.concatenate([fake_pred, real_pred])
-            discriminator_batch_y = np.concatenate([fake, real])
+            fake_pred = encoder_model(batch)
+            real_pred = tf.random.normal((self.batch_size, self.latent_dim))
+            discriminator_batch_x = tf.concat([fake_pred, real_pred], axis=0)
+            discriminator_batch_y = tf.concat([fake, real], axis=0)
 
+            discriminator_train_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
+                                                                            y=discriminator_batch_y)
 
-            discriminator_history = self.discriminator.train_on_batch(x=discriminator_batch_x,
-                                                                      y=discriminator_batch_y)
-            dis_loss.append(discriminator_history[0])
+            encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('y').output)
 
-            fake_pred_cat = self.encoder.predict(batch)[3]
+            fake_pred_cat = encoder_model(batch)
             class_sample = np.random.randint(low=0, high=self.num_clusters, size=self.batch_size)
-            real_pred_cat = to_categorical(class_sample, num_classes=self.num_clusters).astype(int)
+            real_pred_cat = tf.convert_to_tensor(to_categorical(class_sample, num_classes=self.num_clusters))
 
-            discriminator_cat_batch_x = np.concatenate([fake_pred_cat, real_pred_cat])
-            discriminator_cat_batch_y = np.concatenate([fake, real])
+            discriminator_cat_batch_x = tf.concat([fake_pred_cat, real_pred_cat], axis=0)
+            discriminator_cat_batch_y = tf.concat([fake, real], axis=0)
 
-            discriminator_cat_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
-                                                                              y=discriminator_cat_batch_y)
-            dis_cat_loss.append(discriminator_cat_history[0])
+            discriminator_cat_train_history = self.discriminator_cat.train_on_batch(x=discriminator_cat_batch_x,
+                                                                                    y=discriminator_cat_batch_y)
 
             # Reconstruction phase
             real = np.zeros((self.batch_size,), dtype=int)
             autoencoder_train_history = self.autoencoder.train_on_batch(x=batch,
                                                                         y=[batch, real, real])
-            rec_loss.append(autoencoder_train_history[0])
 
-            # autoencoder_test_history = self.autoencoder.test_on_batch(x=batch,
-            #                                                           y=[batch, real, real])
-            # val_loss.append(autoencoder_test_history[0])
+        return discriminator_train_history, discriminator_cat_train_history, autoencoder_train_history
 
-            if ((step+1) % steps == 0):
+    def distributed_train(self, train_dist_dataset, strategy,
+                          enable_function=True, graph=False, gene=None,
+                          log_dir="./results"):
 
-                clear_output(wait=True)
+        """Training of the Adversarial Autoencoder.
 
-                print(
-                    "Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}, cat. dis. loss: {4:.6f}"
-                        .format(
-                        *[int((step + 1)/steps), self.epochs, rec_loss[0], dis_loss[0], dis_cat_loss[0]])
-                )
+            During the reconstruction phase the training of the generator proceeds with the
+            discriminators weights frozen.
 
-                if graph and (gene is not None):
-                    self.plot_umap(gene_selected=[gene], louvain=True)
+            :param train_dist_dataset:
+                train dataset
+            :type train_dist_dataset:
+                tensorflow distributed dataset object
+            :param strategy:
+                distribute strategy
+            :type strategy:
+                tensorflow distribution strategy object
+            :param enable_function:
+                If True, wraps the train_step and test_step in tf.function
+            :type enable_function:
+                bool
+            :param graph:
+                if true, then shows every 10 epochs 2-D cluster plot with selected gene expression
+            :type graph:
+                bool
+            :param gene:
+                selected gene
+            :type gene: str
+            :param log_dir:
+                directory with exported model files and tensorboard checkpoints
+            :type log_dir: str
+
+            :return:
+                lists containing reconstruction loss, generator loss, and discriminator loss at each epoch
+
+        """
+
+        dis_loss = []
+        dis_cat_loss = []
+        rec_loss = []
+
+        def distributed_train_epoch(ds):
+
+            total_dis_loss = 0.0
+            total_dis_cat_loss = 0.0
+            total_auto_loss = 0.0
+            num_train_batches = 0.0
+
+            for one_batch in ds:
+                per_replica_dis_losses, per_replica_dis_cat_losses, per_replica_auto_losses = strategy.experimental_run_v2(
+                    self.train_step, args=(one_batch,))
+
+                total_dis_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_dis_losses[0]], axis=0)
+                total_dis_cat_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_dis_cat_losses[0]],
+                                                      axis=0)
+                total_auto_loss += strategy.reduce(tf.distribute.ReduceOp.SUM, [per_replica_auto_losses[0]], axis=0)
+
+                num_train_batches += 1
+
+            return total_dis_loss, total_dis_cat_loss, total_auto_loss, num_train_batches
+
+        if enable_function:
+            distributed_train_epoch = tf.function(distributed_train_epoch)
+
+        print("Start model training...")
+
+        for epoch in range(self.epochs):
+
+            train_dis_loss, train_dis_cat_loss, train_auto_loss, num_train_batches = distributed_train_epoch(
+                train_dist_dataset)
+
+            train_dis_loss = train_dis_loss / num_train_batches
+            train_dis_cat_loss = train_dis_cat_loss / num_train_batches
+            train_auto_loss = train_auto_loss / num_train_batches
+
+            dis_loss.append(train_dis_loss.numpy())
+            dis_cat_loss.append(train_dis_cat_loss.numpy())
+            rec_loss.append(train_auto_loss.numpy())
+
+            message = ("Epoch {0:d}/{1:d}, rec. loss: {2:.6f}, dis. loss: {3:.6f}, cat. dis. loss: {4:.6f}")
+
+            clear_output(wait=True)
+
+            print(message.format(
+                *[epoch + 1, self.epochs,
+                  train_auto_loss.numpy(),
+                  train_dis_loss.numpy(),
+                  train_dis_cat_loss.numpy()]
+            )
+            )
+
+            if graph and (gene is not None):
+                self.plot_umap(gene_selected=[gene], louvain=True)
 
         print("Training completed.")
 
@@ -1707,37 +1914,4 @@ class AAE2(Base):
         makedirs(log_dir + 'models/', exist_ok=True)
         self.export_model(log_dir + 'models/')
 
-        if update_labels:
-            self.update_labels()
-
-        makedirs(log_dir + '/logs/projector/', exist_ok=True)
-        with open(join(log_dir + 'logs/projector/', 'metadata.tsv'), 'w') as f:
-            np.savetxt(f, self.labels, fmt='%i')
-
-        self.encoder = load_model(log_dir + 'models/encoder.h5')
-
-        tensorboard = TensorBoard(log_dir=log_dir + 'logs/projector/',
-                                  batch_size=self.batch_size,
-                                  embeddings_freq=1,
-                                  write_graph=False,
-                                  embeddings_layer_names=['z_mean', 'Z'],
-                                  embeddings_metadata='metadata.tsv',
-                                  embeddings_data=self.data
-                                  )
-
-        res = self.encoder.predict(self.data, batch_size=self.batch_size)
-        data_compression = res[2]
-        categories = res[3]
-        self.encoder.compile(optimizer='adam',
-                             loss=[None, None, 'mse', 'binary_crossentropy'])
-        self.encoder.fit(self.data,
-                         [data_compression, categories],
-                         batch_size=self.batch_size,
-                         callbacks=[tensorboard],
-                         epochs=1,
-                         verbose=0)
-        print("Latent space embedding completed.")
-
         return rec_loss, dis_loss, dis_cat_loss
-
-
