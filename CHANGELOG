@@ -1,6 +1,17 @@
 CHANGELOG FILE
 ===============
 
+2019-10-08 Emiliano Molinaro <emil.molinaro@gmail.com>
+
+    * Version 1.0.0
+
+    * model classes VAE, AAE1, and AAE2 written in tf.keras API
+
+    * added TensorFlow distribution strategy
+
+    * added a separate section for notebooks and run scripts
+
+
 2019-09-04 Emiliano Molinaro <emil.molinaro@gmail.com>
 
     * Version 0.4.0
