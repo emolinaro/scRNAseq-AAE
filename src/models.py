@@ -133,6 +133,8 @@ class Base():
         decoder deep neural network
     discriminator: keras.engine.training.Model
         discriminator deep neural network
+    adata: AnnData oject
+        ScanPy AnnData object containing gene expression raw data
     data: numpy.ndarray
         matrix containing gene expression
     gene_list: list
@@ -308,6 +310,8 @@ class Base():
         """
 
         adata = read_h5ad(datapath)
+        
+        self.adata = adata
 
         self.data = adata.X
 
@@ -413,7 +417,12 @@ class Base():
             figure
         """
 
-        z_mean = self.encoder.predict(self.data, batch_size=self.batch_size)[0]
+        encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                                  outputs=self.autoencoder.layers[1].get_layer('z_mean').output)
+
+        z_mean = encoder_model(self.data).numpy()
+            
+        # z_mean = self.encoder.predict(self.data, batch_size=self.batch_size)[0]
 
         reducer = UMAP()
         z_mean = reducer.fit_transform(z_mean)
