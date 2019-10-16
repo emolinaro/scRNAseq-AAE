@@ -2,28 +2,30 @@
 
 ## model version: 1.0.0
 
-while getopts f:m:p:ap:tf:ds:o:w:t: option
+while getopts F:M:P:A:R:S:O:W:T: option
 do
 	case "${option}"
 	in
-		f) DATA_FILE="-f "${OPTARG};;
-		m) MODEL_TYPE="-m "${OPTARG};;
-		p) PARAM_FILE="-p "${OPTARG};;
-		ap) ADD_PARAM_FILE="-ap "${OPTARG};;
-		tf) TFRECORD_DATA_FILE="-tf "${OPTARG};;
-		ds) STRATEGY_TYPE="-ds "${OPTARG};;
-		o) OUTPUT_FOLDER="-o "${OPTARG};;
-		w) WORKER_LIST="-w "${OPTARG};;
-		t) TASK="-t "${OPTARG};;
+		F) DATA_FILE="-f "${OPTARG};;
+		M) MODEL_TYPE="-m "${OPTARG};;
+		P) PARAM_FILE="-p "${OPTARG};;
+		A) ADD_PARAM_FILE="-ap "${OPTARG};;
+		R) TFRECORD_DATA_FILE="-tf "${OPTARG};;
+		S) STRATEGY_TYPE="-ds "${OPTARG};;
+		O) OUTPUT_FOLDER="-o "${OPTARG};;
+		W) WORKER_LIST="-w "${OPTARG};;
+		T) TASK="-t "${OPTARG};;
 	esac
 done
 
 ## load additional dependencies
 
 ## run training script
+
 python train.py $DATA_FILE $MODEL_TYPE $PARAM_FILE \
                 $ADD_PARAM_FILE $TFRECORD_DATA_FILE \
                 $STRATEGY_TYPE $OUTPUT_FOLDER \
                 $WORKER_LIST $TASK
 
-
+## example:
+## ./train.batch -F ../data/proc/pbmc10k.h5ad -O pbmc10k -S MultiWorkerMirroredStrategy -W 's41p35.deic.sdu.dk s41p36.deic.sdu.dk s42p32.deic.sdu.dk'  -T 0
