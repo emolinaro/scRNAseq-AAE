@@ -140,7 +140,7 @@ def data_generator(filepath, batch_size=35, epochs=200, num_cpus=24, is_training
         parsed_features = tf.io.parse_single_example(proto, keys_to_features)
 
         # turn saved data string into an array
-        parsed_features['data'] = tf.decode_raw(parsed_features['data'], tf.float32)
+        parsed_features['data'] = tf.io.decode_raw(parsed_features['data'], tf.float32)
 
         return parsed_features['data']
 
