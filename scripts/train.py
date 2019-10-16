@@ -229,7 +229,7 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
         name of the output folder
     """
 
-    tf.enable_eager_execution()
+   # tf.enable_eager_execution()
     tf.executing_eagerly()
 
     if data_file is None:
