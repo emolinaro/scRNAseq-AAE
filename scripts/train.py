@@ -76,7 +76,7 @@ def init_parameters(param_file, model_type):
                 'latent_dim': 100,
                 'layers_enc_dim': [1000, 500, 400, 300, 200],
                 'layers_dec_dim': [200, 300, 400, 500, 1000],
-                'batch_size': 1000,
+                'batch_size': 256,
                 'epochs': 5000
             }
 
@@ -87,7 +87,7 @@ def init_parameters(param_file, model_type):
                 'layers_enc_dim': [1000, 500, 400, 300, 200],
                 'layers_dec_dim': [200, 300, 400, 500, 1000],
                 'layers_dis_dim': [1000, 500, 400, 300, 200],
-                'batch_size': 1000,
+                'batch_size': 256,
                 'epochs': 100
             }
 
@@ -100,7 +100,7 @@ def init_parameters(param_file, model_type):
                 'layers_dec_dim': [200, 300, 400, 500, 1000],
                 'layers_dis_dim': [1000, 500, 400, 300, 200],
                 'layers_dis_cat_dim': [1000, 500, 400, 300, 200],
-                'batch_size': 1000,
+                'batch_size': 256,
                 'epochs': 100,
                 'tau': 0.05  # temperature parameter
             }
@@ -258,7 +258,7 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
     # Build and compile the model
     print(PC.BLUE + " build and compile model  " + PC.ENDC)
     print(PC.BLUE + " -----------------------\n" + PC.ENDC)
-
+    
     # Set distribution strategy
     if strategy_type == 'MirroredStrategy':
         CROSS_DEVICE_OPS = tf.distribute.NcclAllReduce()
@@ -266,7 +266,7 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
         # CROSS_DEVICE_OPS = tf.distribute.HierarchicalCopyAllReduce()
         strategy = tf.distribute.MirroredStrategy(
             cross_device_ops=CROSS_DEVICE_OPS)
-
+	
         with strategy.scope():
             if model_type == 'VAE':
                 BATCH_SIZE_PER_REPLICA = model.batch_size
