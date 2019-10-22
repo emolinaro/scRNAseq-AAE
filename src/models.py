@@ -12,6 +12,9 @@ from tensorflow.keras import backend as K
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 
+from sklearn.metrics import adjusted_rand_score
+from sklearn.metrics.cluster import adjusted_mutual_info_score
+
 # TensorBoard = TensorBoardWithSession
 
 from tensorflow.keras.utils import to_categorical, plot_model
@@ -145,17 +148,19 @@ class Base():
     Methods
     -------
     get_parameters()
-        Print the list of network parameters
+        print the list of network parameters
     get_data(datapath)
-        Read data file and initialize cell gene counts, gene name list and cell subgroups
+        read data file and initialize cell gene counts, gene name list and cell subgroups
     rescale_data()
-        Rescale gene expression data to zero mean and unit variance
+        rescale gene expression data to zero mean and unit variance
     get_summary(model)
         print model summary
     export_graph(model, filename)
         save model graph to file
     plot_umap(gene_selected, louvain=False)
         plot the gene expression in the 2-D latent space using UMAP clustering algorithm
+    eval_clustering(labels_true, labels_pred, graph=True)
+        evaluate clustering accuracy
     export_model(filepath)
         export the network models in h5 format
 
@@ -485,6 +490,91 @@ class Base():
                 plt.ylabel("z[1]")
 
                 plt.show()
+
+    def eval_clustering(self, labels_true, labels_pred, graph=True):
+        """Evaluate clustering accuracy.
+
+        :param labels_true:
+            true labels from given ground truth
+        :param labels_pred:
+            predicted lables applying Louvain algorithm on the latent space
+        :param graph:
+            plot cluster labels with UMAP representation
+        """
+
+        def cluster_acc(y_true, y_pred):
+            """
+            Calculate clustering accuracy using Hungarian method.
+
+            :param y_true:
+                true labels
+            :param y_pred:
+                predicted labels
+            :return:
+                accuracy, in [0,1]
+            """
+
+
+            y_true = np.array(y_true).astype(np.int64)
+            assert y_pred.size == y_true.size
+            dim = max(y_pred.max(), y_true.max()) + 1
+            w = np.zeros((dim, dim), dtype=np.int64)
+            for i in range(y_pred.size):
+                w[y_pred[i], y_true[i]] += 1
+            import scipy
+            ii, jj = scipy.optimize.linear_sum_assignment(w.max() - w)
+            ind = zip(ii, jj)
+            return sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size
+
+        encoder_model = Model(inputs=self.autoencoder.layers[1].get_layer('X').input,
+                              outputs=self.autoencoder.layers[1].get_layer('z_mean').output)
+
+        z_mean = encoder_model(self.data).numpy()
+
+        reducer = UMAP()
+        z_mean = reducer.fit_transform(z_mean)
+
+        if graph:
+            plt.figure(figsize=(14, 5))
+
+            plt.subplot(1, 2, 1)
+            cmap = plt.get_cmap('tab20', np.max(labels_true) - np.min(labels_true) + 1)
+            plt.scatter(z_mean[:, 0], z_mean[:, 1],
+                        c=labels_true,
+                        cmap=cmap,
+                        vmin=np.min(labels_true) - .5,
+                        vmax=np.max(labels_true) + .5,
+                        s=5)
+
+            plt.colorbar()
+            plt.title("Ground truth")
+            plt.xlabel("z[0]")
+            plt.ylabel("z[1]")
+
+            plt.subplot(1, 2, 2)
+
+            cmap2 = plt.get_cmap('tab20', np.max(labels_pred) - np.min(labels_pred) + 1)
+            plt.scatter(z_mean[:, 0], z_mean[:, 1],
+                        c=labels_pred,
+                        cmap=cmap2,
+                        vmin=np.min(labels_pred) - .5,
+                        vmax=np.max(labels_pred) + .5,
+                        s=5)
+
+            plt.colorbar()
+            plt.title('Model clustering')
+            plt.xlabel("z[0]")
+            plt.ylabel("z[1]")
+
+            plt.tight_layout()
+            plt.show()
+
+        print("Measures of clusters similarity:\n")
+        print("adjusted random index = {}".format(adjusted_rand_score(labels_true, labels_pred)))
+        print("adjusted mutual information = {}".format(adjusted_mutual_info_score(labels_true, labels_pred)))
+        print("clustering accuracy = {}".format(cluster_acc(labels_true, labels_pred)))
+
+        return z_mean
 
     def export_model(self, filepath):
 
