@@ -491,7 +491,7 @@ class Base():
 
                 plt.show()
 
-    def eval_clustering(self, labels_true, labels_pred, graph=True):
+    def eval_clustering(self, labels_true, labels_pred, graph=True, verbose=True):
         """Evaluate clustering accuracy.
 
         :param labels_true:
@@ -500,6 +500,8 @@ class Base():
             predicted lables applying Louvain algorithm on the latent space
         :param graph:
             plot cluster labels with UMAP representation
+        :param verbose:
+            print clustering measures: ARI, AMI, and CA
         """
 
         def cluster_acc(y_true, y_pred):
@@ -569,12 +571,17 @@ class Base():
             plt.tight_layout()
             plt.show()
 
-        print("Measures of clusters similarity:\n")
-        print("adjusted random index = {}".format(adjusted_rand_score(labels_true, labels_pred)))
-        print("adjusted mutual information = {}".format(adjusted_mutual_info_score(labels_true, labels_pred)))
-        print("clustering accuracy = {}".format(cluster_acc(labels_true, labels_pred)))
+        ARI = adjusted_rand_score(labels_true, labels_pred)
+        AMI = adjusted_mutual_info_score(labels_true, labels_pred)
+        CA = cluster_acc(labels_true, labels_pred)
 
-        return z_mean
+        if verbose:
+            print("Measures of clusters similarity:\n")
+            print("adjusted random index = {}".format(ARI))
+            print("adjusted mutual information = {}".format(AMI))
+            print("clustering accuracy = {}".format(CA))
+
+        return z_mean, ARI, AMI, CA
 
     def export_model(self, filepath):
 
