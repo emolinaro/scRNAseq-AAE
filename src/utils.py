@@ -1,4 +1,6 @@
 import tensorflow as tf
+from tqdm import tqdm
+from sklearn.model_selection import ParameterGrid
 
 
 class PColors:
@@ -24,6 +26,48 @@ class TensorBoardWithSession(tf.keras.callbacks.TensorBoard):
         self.sess = K.get_session()
 
         super().__init__(**kwargs)
+
+
+def cluster_grid_scan(model, res, n_nbs, n_pcs):
+    """Perform a grid search of clusters similarity algorithms. Included measures are:
+           1) adjusted random index (ARI)
+           2) adjusted mutual information (AMI)
+           3) cluster accuracy based on Hungarian maximum matching algorithm (CA)
+
+    :param model:
+        trained model (VAE, AAE1, AAE2).
+    :param res:
+        resolution
+    :param n_nbs:
+        number of neighbors
+    :param n_pcs:
+        number of partial components
+    :return:
+        dictionary with grid parameters and cluster measures
+    """
+
+    param_grid = {'res': res, 'n_nbs': n_nbs, 'n_pcs': n_pcs}
+
+    grid = ParameterGrid(param_grid)
+
+    out = {'res': [], 'n_nbs': [], 'n_pcs': [], 'ARI': [], 'AMI': [], 'CA': []}
+
+    for ps in tqdm(grid):
+
+        model.update_labels(res=ps['res'], n_neighbors=ps['n_nbs'], n_pcs=ps['n_pcs'])
+        labels_pred = model.labels
+        _, ps['ARI'], ps['AMI'], ps['CA'] = model.eval_clustering(labels_true,
+                                                                  labels_pred,
+                                                                  graph=False,
+                                                                  verbose=False)
+
+        for item in ps.keys():
+            out[item].append(ps[item])
+
+    for item in out.keys():
+        out[item] = np.array(out[item])
+
+    return out
 
 
 # Helperfunctions to make your feature definition more readable
