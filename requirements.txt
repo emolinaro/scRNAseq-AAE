@@ -25,3 +25,4 @@ pydot
 IPython
 anndata==0.6.22.post1
 gast==0.2.2
+tqdm
