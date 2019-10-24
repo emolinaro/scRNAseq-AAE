@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from tqdm import tqdm
 from sklearn.model_selection import ParameterGrid
 
@@ -28,14 +29,16 @@ class TensorBoardWithSession(tf.keras.callbacks.TensorBoard):
         super().__init__(**kwargs)
 
 
-def cluster_grid_scan(model, res, n_nbs, n_pcs):
+def cluster_grid_scan(model, labels_true, res, n_nbs, n_pcs):
     """Perform a grid search of clusters similarity algorithms. Included measures are:
            1) adjusted random index (ARI)
            2) adjusted mutual information (AMI)
            3) cluster accuracy based on Hungarian maximum matching algorithm (CA)
 
     :param model:
-        trained model (VAE, AAE1, AAE2).
+        trained model (VAE, AAE1, AAE2)
+    :param labels_true:
+        ground truth labels
     :param res:
         resolution
     :param n_nbs:
