@@ -3,6 +3,7 @@ import os, sys
 import argparse
 import json
 import textwrap
+import time
 
 sys.path.append('../src')
 from models import *
@@ -328,6 +329,8 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
 
     os.makedirs(log_dir + '/losses', exist_ok=True)
 
+    start = time.time()
+
     if model_type == 'VAE':
 
         if add_param_file is None:
@@ -445,6 +448,11 @@ def main(data_file, model_type, strategy_type, param_file, add_param_file, tfrec
 
             # Save training loss and validation loss to file
             print('Reconstruction loss, discriminator loss, and categorical discriminator loss exported to file.')
+
+    end = time.time()
+    hours, rem = divmod(end - start, 3600)
+    minutes, seconds = divmod(rem, 60)
+    print("Training completed in {:0>2}:{:0>2}:{:05.2f} .".format(int(hours), int(minutes), seconds))
 
 
 if __name__ == "__main__":
