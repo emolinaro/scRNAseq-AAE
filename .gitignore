@@ -113,3 +113,5 @@ data/
 models/
 graphs/
 results/
+/data
+/scRNAseq-AAE
