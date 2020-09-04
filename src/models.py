@@ -11,6 +11,7 @@ from tensorflow.keras.losses import mse
 from tensorflow.keras import backend as K
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
+from tensorflow.keras import regularizers
 
 from sklearn.metrics import adjusted_rand_score
 from sklearn.metrics.cluster import adjusted_mutual_info_score
