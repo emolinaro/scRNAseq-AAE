@@ -307,7 +307,7 @@ class Base():
         """Read data file and initialize cell gene counts, gene name list and cell subgroups.
 
         Data file is a Scanpy AnnData object saved in h5ad format.
-        This object contains cell subgoups obtained using Louvain algorithm.
+        This object contains cell subgroups obtained using Louvain algorithm.
 
         :param str datapath:
             path to data file (h5ad format)
