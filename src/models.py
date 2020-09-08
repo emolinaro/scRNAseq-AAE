@@ -45,7 +45,7 @@ def sampling(args):
     """
 
     z_mean, z_log_var = args
-    batch = K.shape(z_mean)[0]
+    batch = K.int_shape(z_mean)[0]
     dim = K.int_shape(z_mean)[1]
     # by default, random_normal has mean = 0 and std = 1.0
     epsilon = K.random_normal(shape=(batch, dim))
@@ -326,9 +326,9 @@ class Base():
         self.gene_list = adata.var_names.values
 
         try:
-            self.labels = adata.obs['louvain'].values.astype(int).tolist()
+            self.labels = adata.obs['leiden'].values.astype(int).tolist()
         except:
-            print("Louvain clustering not defined in this dataset.")
+            print("Leiden clustering not defined in this dataset.")
             self.labels = np.zeros((self.original_dim,), dtype=int)
 
         print("Dataset imported.")
