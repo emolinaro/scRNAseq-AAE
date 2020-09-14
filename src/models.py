@@ -45,8 +45,8 @@ def sampling(args):
     """
 
     z_mean, z_log_var = args
-    batch = K.int_shape(z_mean)[0]
-    dim = K.int_shape(z_mean)[1]
+    batch = K.shape(z_mean)[0]
+    dim = K.shape(z_mean)[1]
     # by default, random_normal has mean = 0 and std = 1.0
     epsilon = K.random_normal(shape=(batch, dim))
     return z_mean + K.exp(0.5 * z_log_var) * epsilon
@@ -150,7 +150,7 @@ class Base():
     -------
     get_parameters()
         print the list of network parameters
-    get_data(datapath)
+    load_data(datapath)
         read data file and initialize cell gene counts, gene name list and cell subgroups
     rescale_data()
         rescale gene expression data to zero mean and unit variance
@@ -638,7 +638,7 @@ class VAE(Base):
     -------
     get_parameters()
         Print the list of network parameters
-    get_data(datapath)
+    load_data(datapath)
         Read data file and initialize cell gene counts, gene name list and cell subgroups
     rescale_data()
         Rescale gene expression data to zero mean and unit variance
@@ -1095,7 +1095,7 @@ class AAE1(Base):
     -------
     get_parameters()
         Print the list of network parameters
-    get_data(datapath)
+    load_data(datapath)
         Read data file and initialize cell gene counts, gene name list and cell subgroups
     rescale_data()
         Rescale gene expression data to zero mean and unit variance
@@ -1427,7 +1427,7 @@ class AAE1(Base):
 ############### MODEL n.2 ################
 ##########################################
 class AAE2(Base):
-    """ Unsupervised adversarial autoencoder model with arebitrary number of clusters.
+    """ Unsupervised adversarial autoencoder model with arbitrary number of clusters.
 
     Attributes
     ----------
@@ -1448,7 +1448,7 @@ class AAE2(Base):
     -------
     get_parameters()
         Print the list of network parameters
-    get_data(datapath)
+    load_data(datapath)
         Read data file and initialize cell gene counts, gene name list and cell subgroups
     rescale_data()
         Rescale gene expression data to zero mean and unit variance
