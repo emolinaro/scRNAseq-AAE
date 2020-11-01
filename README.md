@@ -1,3 +1,5 @@
+<a href="https://zenodo.org/badge/latestdoi/195829758"><img src="https://zenodo.org/badge/195829758.svg" alt="DOI"></a>
+
 # scRNAseq-AAE
 Single cell RNA-sequencing analysis with Adversarial Autoencoders.
 
