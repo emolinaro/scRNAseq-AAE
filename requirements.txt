@@ -2,7 +2,7 @@ numpy
 pandas
 jupyter
 h5py==2.9.0 # https://github.com/theislab/scanpy/issues/832
-tensorflow==1.14.0
+tensorflow==2.5.1
 # tensorflow-gpu==1.14.0
 tensorboard==1.14.0
 tensorflow-estimator==1.14.0
